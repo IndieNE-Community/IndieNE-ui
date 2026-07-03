@@ -1,27 +1,5 @@
-export interface ComentarioMock {
-  usuario: string
-  texto: string
-  likes: number
-  dislikes: number
-}
-
-export interface Atualizacao {
-  titulo: string
-  data: string
-  descricao: string
-  imagem?: string
-  comentarios: ComentarioMock[]
-}
-
-export interface DetalhesJogo {
-  descricao: string
-  valorArrecadado: number
-  apoiadores: number
-  dias: number
-  metaValor: number
-  fotos: string[]
-  atualizacoes: Atualizacao[]
-}
+// TODO(API): substituir detalhes, campanha, atualizações e comentários mockados pelos respectivos dados do backend.
+import type { DetalhesJogo } from '~/types/jogo-detalhes.interface'
 
 const vazio: DetalhesJogo = {
   descricao: '',
@@ -31,12 +9,6 @@ const vazio: DetalhesJogo = {
   metaValor: 0,
   fotos: [],
   atualizacoes: []
-}
-
-/** Formata número como moeda para o layout (ex.: 68745 → "R$ 68.745") */
-export function formatarMoeda (valor: number): string {
-  if (valor <= 0) return 'R$ 0'
-  return 'R$ ' + valor.toLocaleString('pt-BR')
 }
 
 /** Gera detalhes mínimos (meta, valor, apoiadores) alinhados ao metaPercentual do jogo. */
@@ -131,22 +103,4 @@ const detalhesPorJogo: Record<string, DetalhesJogo> = {
 
 export function getDetalhesJogo (jogoId: string): DetalhesJogo {
   return detalhesPorJogo[jogoId] ?? { ...vazio }
-}
-
-/** Converte string do form "R$ 100.000" em número (para meta editável na área DEV). */
-export function parseMetaValor (s: string | undefined): number {
-  if (!s || s === '—') return 0
-  const num = s.replace(/[R$\s.]/g, '').replace(',', '.')
-  const n = Number(num)
-  return Number.isFinite(n) ? n : 0
-}
-
-/** Base da campanha (valor + apoiadores) para somar com contribuições. Fonte única. */
-export function getBaseCampanha (jogoId: string): { valorNumerico: number; apoiadores: number; metaNumerico: number } {
-  const d = getDetalhesJogo(jogoId)
-  return {
-    valorNumerico: d.valorArrecadado,
-    apoiadores: d.apoiadores,
-    metaNumerico: d.metaValor
-  }
 }

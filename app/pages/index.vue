@@ -106,57 +106,30 @@
 </template>
 
 <script setup lang="ts">
+// TODO(API): carregar destaques e últimas postagens da API em vez dos arquivos em app/data.
+
 import { getDetalhesJogo } from '~/data/jogo-detalhes'
 import { jogos } from '~/data/jogos'
 
-definePageMeta({ layout: 'default' })
+const ITENS_POR_PAGINA = 8
 
 const { destaqueHero, jogosDestaque, jogosSobrevivencia, jogosRpg } = useJogos()
-
 const { getPosts: getPostsDev } = usePostsDev()
-const ultimasPostagens = computed(() => {
-  const list: { id: string; titulo: string; autor: string; descricao: string; thumb?: string; jogoId: string }[] = []
-  for (const jogo of jogos) {
-    const detalhes = getDetalhesJogo(jogo.id)
-    const todasAtualizacoes = [...getPostsDev(jogo.id), ...detalhes.atualizacoes]
-    todasAtualizacoes.forEach((post, idx) => {
-      list.push({
-        id: `${jogo.id}-${idx}`,
-        titulo: post.titulo,
-        autor: jogo.title,
-        descricao: post.descricao,
-        thumb: post.imagem,
-        jogoId: jogo.id
-      })
-    })
-  }
-  return list
-})
-
-const ITENS_POR_PAGINA = 8
-const paginaAtual = ref(1)
-const totalPaginas = computed(() =>
-  Math.max(1, Math.ceil(ultimasPostagens.value.length / ITENS_POR_PAGINA))
-)
-const ultimasPostagensPagina = computed(() => {
-  const start = (paginaAtual.value - 1) * ITENS_POR_PAGINA
-  return ultimasPostagens.value.slice(start, start + ITENS_POR_PAGINA)
-})
-const paginationPages = computed(() => {
-  const total = totalPaginas.value
-  const p = paginaAtual.value
-  const pages: number[] = []
-  if (total <= 9) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (p > 3) pages.push(-1)
-    for (let i = Math.max(2, p - 1); i <= Math.min(total - 1, p + 1); i++) {
-      if (!pages.includes(i)) pages.push(i)
-    }
-    if (p < total - 2) pages.push(-1)
-    if (total > 1) pages.push(total)
-  }
-  return pages
-})
+const ultimasPostagens = computed(() => jogos.flatMap((jogo) => {
+  const detalhes = getDetalhesJogo(jogo.id)
+  return [...getPostsDev(jogo.id), ...detalhes.atualizacoes].map((post, idx) => ({
+    id: `${jogo.id}-${idx}`,
+    titulo: post.titulo,
+    autor: jogo.title,
+    descricao: post.descricao,
+    thumb: post.imagem,
+    jogoId: jogo.id
+  }))
+}))
+const {
+  paginaAtual,
+  totalPaginas,
+  paginationPages,
+  itensExibidos: ultimasPostagensPagina
+} = usePagination(ultimasPostagens, ITENS_POR_PAGINA, true)
 </script>

@@ -1,17 +1,5 @@
-export interface Jogo {
-  id: string
-  title: string
-  thumb?: string
-  genero: string[]
-  desenvolvedor: string
-  metaPercentual: number
-  dataPostagem: string
-  dataConclusao?: string
-  qtdeJogadores: string
-  compatControle: boolean
-  so: string[]
-  categorias: string[]
-}
+// TODO(API): remover este catálogo estático quando a listagem pública de jogos fornecer todos os campos de exibição.
+import type { Jogo } from '~/types/jogo.interface'
 
 export const jogos: Jogo[] = [
   { id: 'god-breakers', title: 'God Breakers', thumb: '/images/jogos/god-breakers.avif', genero: ['Roguelike', 'Ação', 'Multijogador', 'Cooperativo'], desenvolvedor: 'To The Sky', rating: '87', metaPercentual: 68, dataPostagem: '2024-01-15', dataConclusao: '2025-06', qtdeJogadores: '1-4', compatControle: true, so: ['Windows', 'Linux'], categorias: ['destaque', 'destaque-hero'] },

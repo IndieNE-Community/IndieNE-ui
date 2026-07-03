@@ -179,15 +179,12 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
+const ITENS_POR_PAGINA = 12
 
 const route = useRoute()
 const router = useRouter()
-const itensPorPagina = 12
-
 const busca = ref('')
 const filtroAberto = ref<string | null>('genero')
-
 const filtros = reactive({
   generos: [] as string[],
   desenvolvedor: null as string | null,
@@ -198,33 +195,34 @@ const filtros = reactive({
   so: [] as string[]
 })
 
-/** Lê os query params e aplica nos filtros (ex.: /explorar?genero=Survival&genero=RPG) */
+function valoresString (valor: unknown): string[] {
+  const valores = Array.isArray(valor) ? valor : valor ? [valor] : []
+  return valores.filter((item): item is string => typeof item === 'string')
+}
+
 function syncQueryToFiltros () {
-  const q = route.query
-  const genero = q.genero
-  filtros.generos = (Array.isArray(genero) ? genero : genero ? [genero] : []).filter((v): v is string => typeof v === 'string')
-  if (q.busca !== undefined) busca.value = (q.busca as string) ?? ''
-  filtros.desenvolvedor = (q.desenvolvedor as string) || null
-  filtros.metaMin = q.metaMin != null ? Number(q.metaMin) : null
-  filtros.dataPostagem = (q.dataPostagem as string) || null
-  filtros.qtdeJogadores = (q.qtdeJogadores as string) || null
-  filtros.compatControle = q.controle === 'sim' ? true : null
-  const so = q.so
-  filtros.so = (Array.isArray(so) ? so : so ? [so] : []).filter((v): v is string => typeof v === 'string')
+  const query = route.query
+  filtros.generos = valoresString(query.genero)
+  if (query.busca !== undefined) busca.value = (query.busca as string) ?? ''
+  filtros.desenvolvedor = (query.desenvolvedor as string) || null
+  filtros.metaMin = query.metaMin !== undefined ? Number(query.metaMin) : null
+  filtros.dataPostagem = (query.dataPostagem as string) || null
+  filtros.qtdeJogadores = (query.qtdeJogadores as string) || null
+  filtros.compatControle = query.controle === 'sim' ? true : null
+  filtros.so = valoresString(query.so)
   if (filtros.generos.length) filtroAberto.value = 'genero'
 }
 
-/** Atualiza a URL com os filtros atuais (mantém link compartilhável) */
 function syncFiltrosToQuery () {
   const query: Record<string, string | string[] | number | undefined> = {}
-  if (filtros.generos.length) query.genero = filtros.generos.length === 1 ? filtros.generos[0]! : [...filtros.generos]
+  if (filtros.generos.length) query.genero = filtros.generos.length === 1 ? filtros.generos[0] : [...filtros.generos]
   if (busca.value.trim()) query.busca = busca.value.trim()
   if (filtros.desenvolvedor) query.desenvolvedor = filtros.desenvolvedor
-  if (filtros.metaMin != null) query.metaMin = filtros.metaMin
+  if (filtros.metaMin !== null) query.metaMin = filtros.metaMin
   if (filtros.dataPostagem) query.dataPostagem = filtros.dataPostagem
   if (filtros.qtdeJogadores) query.qtdeJogadores = filtros.qtdeJogadores
-  if (filtros.compatControle === true) query.controle = 'sim'
-  if (filtros.so.length) query.so = filtros.so.length === 1 ? filtros.so[0]! : [...filtros.so]
+  if (filtros.compatControle) query.controle = 'sim'
+  if (filtros.so.length) query.so = filtros.so.length === 1 ? filtros.so[0] : [...filtros.so]
   router.replace({ path: route.path, query })
 }
 
@@ -256,32 +254,10 @@ const { jogosFiltrados, opcoesFiltros } = useJogosFiltrados({
   compatControle: toRef(filtros, 'compatControle'),
   so: toRef(filtros, 'so')
 })
-
-const paginaAtual = ref(1)
-const totalPaginas = computed(() => Math.ceil(jogosFiltrados.value.length / itensPorPagina) || 0)
-
-watch(jogosFiltrados, () => { paginaAtual.value = 1 }, { deep: true })
-
-const paginationPages = computed(() => {
-  const p = paginaAtual.value
-  const total = totalPaginas.value
-  const pages: number[] = []
-  if (total <= 9) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (p > 3) pages.push(-1)
-    for (let i = Math.max(2, p - 1); i <= Math.min(total - 1, p + 1); i++) {
-      if (!pages.includes(i)) pages.push(i)
-    }
-    if (p < total - 2) pages.push(-1)
-    if (total > 1) pages.push(total)
-  }
-  return pages
-})
-
-const jogosExibidos = computed(() => {
-  const start = (paginaAtual.value - 1) * itensPorPagina
-  return jogosFiltrados.value.slice(start, start + itensPorPagina)
-})
+const {
+  paginaAtual,
+  totalPaginas,
+  paginationPages,
+  itensExibidos: jogosExibidos
+} = usePagination(jogosFiltrados, ITENS_POR_PAGINA)
 </script>

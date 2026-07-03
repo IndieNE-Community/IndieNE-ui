@@ -42,9 +42,9 @@
               type="password"
               required
               autocomplete="new-password"
-              minlength="6"
+              minlength="8"
               class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-3 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             >
           </div>
           <div>
@@ -88,11 +88,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
-
-const router = useRouter()
 const { register, isLoggedIn } = useAuth()
-
 const nome = ref('')
 const email = ref('')
 const senha = ref('')
@@ -100,24 +96,23 @@ const confirmarSenha = ref('')
 const erro = ref('')
 const loading = ref(false)
 
-watch(isLoggedIn, (v) => { if (v) router.push('/area-dev') }, { immediate: true })
+if (isLoggedIn.value) await navigateTo('/area-dev')
 
 async function onSubmit () {
   if (senha.value !== confirmarSenha.value) {
     erro.value = 'As senhas não coincidem.'
     return
   }
+
   erro.value = ''
   loading.value = true
   try {
-    const result = register(nome.value, email.value, senha.value)
-    if (result.ok) {
-      await router.push('/area-dev')
-    } else {
-      erro.value = result.erro ?? 'Erro ao cadastrar.'
-    }
+    const resultado = await register(nome.value, email.value, senha.value)
+    if (resultado.ok) await navigateTo('/area-dev')
+    else erro.value = resultado.erro ?? 'Erro ao cadastrar.'
   } finally {
     loading.value = false
   }
 }
+
 </script>

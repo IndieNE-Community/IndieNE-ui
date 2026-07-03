@@ -60,31 +60,24 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
-
-const router = useRouter()
 const { login, isLoggedIn } = useAuth()
-
 const email = ref('')
 const senha = ref('')
 const erro = ref('')
 const loading = ref(false)
 
-// Se já estiver logado, redireciona
-watch(isLoggedIn, (v) => { if (v) router.push('/area-dev') }, { immediate: true })
+if (isLoggedIn.value) await navigateTo('/area-dev')
 
 async function onSubmit () {
   erro.value = ''
   loading.value = true
   try {
-    const result = login(email.value, senha.value)
-    if (result.ok) {
-      await router.push('/area-dev')
-    } else {
-      erro.value = result.erro ?? 'Erro ao entrar.'
-    }
+    const resultado = await login(email.value, senha.value)
+    if (resultado.ok) await navigateTo('/area-dev')
+    else erro.value = resultado.erro ?? 'Erro ao entrar.'
   } finally {
     loading.value = false
   }
 }
+
 </script>

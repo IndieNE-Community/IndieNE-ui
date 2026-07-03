@@ -26,17 +26,17 @@
 </template>
 
 <script setup lang="ts">
+// TODO(API): montar a lista de desenvolvedores a partir dos jogos retornados pela API.
+
 import { jogos } from '~/data/jogos'
 import { slugify } from '~/utils/slug'
 
-definePageMeta({ layout: 'default' })
-
-const desenvolvedoresUnicos = computed(() => {
-  const set = new Set(jogos.map(j => j.desenvolvedor))
-  return Array.from(set).sort()
-})
+const desenvolvedoresUnicos = computed(() =>
+  Array.from(new Set(jogos.map(jogo => jogo.desenvolvedor))).sort()
+)
 
 function qtdeJogos (nome: string) {
-  return jogos.filter(j => j.desenvolvedor === nome).length
+  return jogos.filter(jogo => jogo.desenvolvedor === nome).length
 }
+
 </script>

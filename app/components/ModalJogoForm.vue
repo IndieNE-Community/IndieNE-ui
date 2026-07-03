@@ -237,8 +237,8 @@
 </template>
 
 <script setup lang="ts">
-import type { JogoDev } from '~/types/jogo-dev'
-import { jogoDevVazio } from '~/types/jogo-dev'
+import type { JogoDev } from '~/types/jogo-dev.interface'
+import { jogoDevVazio } from '~/types/jogo-dev.interface'
 
 const props = withDefaults(
   defineProps<{

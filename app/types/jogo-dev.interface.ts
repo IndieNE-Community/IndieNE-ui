@@ -1,5 +1,6 @@
 export interface JogoDev {
   id: string
+  apiId?: number
   title: string
   descricao: string
   thumb: string

@@ -1,4 +1,5 @@
-import type { Jogo } from '~/data/jogos'
+// TODO(API): carregar o catálogo público por JogoService em vez de usar app/data/jogos.ts.
+import type { Jogo } from '~/types/jogo.interface'
 import { jogos as jogosData } from '~/data/jogos'
 
 export type { Jogo }

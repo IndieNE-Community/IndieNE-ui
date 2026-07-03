@@ -54,4 +54,5 @@ function sair () {
   logout()
   router.push('/')
 }
+
 </script>

@@ -89,19 +89,12 @@
 <script setup lang="ts">
 import { slugify } from '~/utils/slug'
 
-definePageMeta({ layout: 'default' })
-
 const route = useRoute()
 const slug = computed(() => (route.params.slug as string) ?? '')
 const { allJogos } = useJogos()
+const jogosDoDesenvolvedor = computed(() =>
+  slug.value ? allJogos.value.filter(jogo => slugify(jogo.desenvolvedor) === slug.value) : []
+)
+const desenvolvedor = computed(() => jogosDoDesenvolvedor.value[0]?.desenvolvedor ?? null)
 
-const jogosDoDesenvolvedor = computed(() => {
-  if (!slug.value) return []
-  return allJogos.value.filter(j => slugify(j.desenvolvedor) === slug.value)
-})
-
-const desenvolvedor = computed(() => {
-  const primeiro = jogosDoDesenvolvedor.value[0]
-  return primeiro?.desenvolvedor ?? null
-})
 </script>

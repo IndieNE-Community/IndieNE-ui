@@ -1,76 +1,45 @@
+// TODO(API): substituir as reações em localStorage por CurtidaService.
 const STORAGE_KEY = 'indiene_comentario_reacoes'
 
 type Reacao = 'like' | 'dislike'
+type ReacoesPorComentario = Record<string, Record<string, Reacao>>
 
-// key: "jogoId:atualizacaoIdx:commentIndex" -> Record<userEmail, Reacao>
-function load (): Record<string, Record<string, Reacao>> {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? JSON.parse(raw) : {}
-    } catch {
-      // ignore
-    }
-  }
-  return {}
-}
-
-function save (data: Record<string, Record<string, Reacao>>) {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }
-}
-
-function key (jogoId: string, atualizacaoIdx: number, commentIndex: number) {
-  return `${jogoId}:${atualizacaoIdx}:${commentIndex}`
+function comentarioKey (jogoId: string, atualizacaoIdx: number, comentarioIdx: number) {
+  return `${jogoId}:${atualizacaoIdx}:${comentarioIdx}`
 }
 
 export function useComentarioReacoes () {
-  const data = ref<Record<string, Record<string, Reacao>>>(load())
+  const data = useLocalStorageState<ReacoesPorComentario>(STORAGE_KEY, { defaultValue: () => ({}) })
+  const { user } = useAuth()
 
-  function persist () {
-    save(data.value)
-  }
-
-  function getTotais (jogoId: string, atualizacaoIdx: number, commentIndex: number): { likes: number; dislikes: number } {
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    const reacoes = data.value[k]
+  function getTotais (jogoId: string, atualizacaoIdx: number, comentarioIdx: number) {
+    const reacoes = data.value[comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)]
     if (!reacoes) return { likes: 0, dislikes: 0 }
-    let likes = 0
-    let dislikes = 0
-    for (const r of Object.values(reacoes)) {
-      if (r === 'like') likes++
-      else dislikes++
-    }
-    return { likes, dislikes }
+
+    return Object.values(reacoes).reduce(
+      (totais, reacao) => {
+        totais[reacao === 'like' ? 'likes' : 'dislikes']++
+        return totais
+      },
+      { likes: 0, dislikes: 0 }
+    )
   }
 
-  function getMinhaReacao (jogoId: string, atualizacaoIdx: number, commentIndex: number): Reacao | null {
-    const { user } = useAuth()
+  function getMinhaReacao (jogoId: string, atualizacaoIdx: number, comentarioIdx: number): Reacao | null {
     const email = user.value?.email
     if (!email) return null
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    return data.value[k]?.[email] ?? null
+    return data.value[comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)]?.[email] ?? null
   }
 
-  function setReacao (jogoId: string, atualizacaoIdx: number, commentIndex: number, tipo: Reacao) {
-    const { user } = useAuth()
+  function setReacao (jogoId: string, atualizacaoIdx: number, comentarioIdx: number, tipo: Reacao) {
     const email = user.value?.email
     if (!email) return
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    if (!data.value[k]) data.value[k] = {}
-    const current = data.value[k][email]
-    if (current === tipo) {
-      delete data.value[k][email]
-    } else {
-      data.value[k][email] = tipo
-    }
-    persist()
+
+    const key = comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)
+    if (!data.value[key]) data.value[key] = {}
+    if (data.value[key][email] === tipo) delete data.value[key][email]
+    else data.value[key][email] = tipo
   }
 
-  return {
-    getTotais,
-    getMinhaReacao,
-    setReacao
-  }
+  return { getTotais, getMinhaReacao, setReacao }
 }

@@ -168,67 +168,55 @@
 </template>
 
 <script setup lang="ts">
+// TODO(API): buscar o jogo selecionado pelo ID na API em vez de consultar o catálogo local.
+
 import { jogos } from '~/data/jogos'
 
-definePageMeta({ layout: 'default' })
+type EstadoContribuicao = 'form' | 'processing' | 'success'
+
+const TEMPO_PROCESSAMENTO_MS = 3500
 
 const route = useRoute()
 const { addContribuicao } = useContribuicoes()
-
 const valoresPredefinidos = [25, 50, 100]
 const valorSelecionado = ref<number | null>(50)
 const valorCustom = ref<number | ''>('')
-
 const jogoId = computed(() => (route.query.jogo as string) || '')
-const jogoTitulo = computed(() => {
-  const j = jogos.find(j => j.id === jogoId.value)
-  return j?.title ?? ''
-})
-
-const cartao = ref({
-  numero: '',
-  nome: '',
-  validade: '',
-  cvv: ''
-})
-
+const jogoTitulo = computed(() => jogos.find(jogo => jogo.id === jogoId.value)?.title ?? '')
+const cartao = ref({ numero: '', nome: '', validade: '', cvv: '' })
 const erro = ref('')
 const loading = ref(false)
-type Estado = 'form' | 'processing' | 'success'
-const estado = ref<Estado>('form')
+const estado = ref<EstadoContribuicao>('form')
 const valorContribuido = ref(0)
 const valorContribuidoFormatado = computed(() =>
   valorContribuido.value > 0 ? `R$ ${valorContribuido.value.toLocaleString('pt-BR')}` : ''
 )
 
-function selecionarValor (v: number) {
-  valorSelecionado.value = v
+function selecionarValor (valor: number) {
+  valorSelecionado.value = valor
   valorCustom.value = ''
 }
 
 function formatarNumeroCartao () {
-  let v = cartao.value.numero.replace(/\D/g, '')
-  if (v.length > 16) v = v.slice(0, 16)
-  cartao.value.numero = v.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+  const numero = cartao.value.numero.replace(/\D/g, '').slice(0, 16)
+  cartao.value.numero = numero.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
 }
 
 function formatarValidade () {
-  let v = cartao.value.validade.replace(/\D/g, '')
-  if (v.length >= 2) {
-    v = v.slice(0, 2) + '/' + v.slice(2, 4)
-  }
-  cartao.value.validade = v
+  const validade = cartao.value.validade.replace(/\D/g, '')
+  cartao.value.validade = validade.length >= 2
+    ? `${validade.slice(0, 2)}/${validade.slice(2, 4)}`
+    : validade
 }
 
 function valorFinal (): number {
-  if (valorSelecionado.value != null) return valorSelecionado.value
-  const n = Number(valorCustom.value)
-  return Number.isFinite(n) && n > 0 ? n : 0
+  if (valorSelecionado.value !== null) return valorSelecionado.value
+  const valor = Number(valorCustom.value)
+  return Number.isFinite(valor) && valor > 0 ? valor : 0
 }
 
 function validarCartao (): boolean {
-  const num = cartao.value.numero.replace(/\s/g, '')
-  if (num.length < 13) {
+  if (cartao.value.numero.replace(/\s/g, '').length < 13) {
     erro.value = 'Número do cartão inválido.'
     return false
   }
@@ -236,8 +224,7 @@ function validarCartao (): boolean {
     erro.value = 'Informe o nome no cartão.'
     return false
   }
-  const val = cartao.value.validade
-  if (!/^\d{2}\/\d{2}$/.test(val)) {
+  if (!/^\d{2}\/\d{2}$/.test(cartao.value.validade)) {
     erro.value = 'Validade deve ser MM/AA.'
     return false
   }
@@ -247,8 +234,6 @@ function validarCartao (): boolean {
   }
   return true
 }
-
-const TEMPO_PROCESSAMENTO_MS = 3500
 
 function confirmar () {
   erro.value = ''

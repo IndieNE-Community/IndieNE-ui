@@ -320,39 +320,48 @@
 </template>
 
 <script setup lang="ts">
-import type { JogoDev } from '~/types/jogo-dev'
-import { useMeusJogos } from '~/composables/useMeusJogos'
-import { formatarMoeda, getBaseCampanha, getDetalhesJogo, parseMetaValor } from '~/data/jogo-detalhes'
-
 definePageMeta({ layout: 'default', middleware: 'auth' })
 
-const { meusJogos, addJogo, updateJogo, getJogoById } = useMeusJogos()
-const { getExtra } = useContribuicoes()
-const { getPosts: getPostsDev, addPost: addPostDev } = usePostsDev()
-const { getAvatarUrl } = useComentarios()
+// TODO(API): substituir campanha e atualizações de app/data/jogo-detalhes.ts por dados do backend.
 
+import type { JogoDev } from '~/types/jogo-dev.interface'
+import { getDetalhesJogo } from '~/data/jogo-detalhes'
+import { getBaseCampanha } from '~/utils/campanha'
+import { formatarMoeda, parseMetaValor } from '~/utils/moeda'
+
+interface FotoPost {
+  src: string
+  titulo: string
+}
+
+const { meusJogos, refresh: refreshJogos, addJogo, updateJogo, getJogoById } = useMeusJogos()
+const { getExtra } = useContribuicoes()
+const { getPosts: getPostsDev, refresh: refreshPosts, addPost: addPostDev } = usePostsDev()
+const { getAvatarUrl } = useComentarios()
 const jogoSelecionado = ref('')
 const modalAberto = ref(false)
 const modalNovoPostAberto = ref(false)
 const jogoParaEditar = ref<JogoDev | null>(null)
 
-// Selecionar primeiro jogo ao carregar
-watch(meusJogos, (list) => {
-  if (!jogoSelecionado.value && list.length > 0) {
-    const primeiro = list[0]
-    if (primeiro) jogoSelecionado.value = primeiro.id
-  }
+watch(meusJogos, (lista) => {
+  if (!jogoSelecionado.value && lista[0]) jogoSelecionado.value = lista[0].id
+}, { immediate: true })
+watch(jogoSelecionado, (id) => {
+  if (id) refreshPosts(id)
 }, { immediate: true })
 
 const jogoAtual = computed(() =>
   jogoSelecionado.value ? getJogoById(jogoSelecionado.value) : undefined
 )
-
 const baseCampanha = computed(() =>
-  jogoSelecionado.value ? getBaseCampanha(jogoSelecionado.value) : { valorNumerico: 0, apoiadores: 0, metaNumerico: 0 }
+  jogoSelecionado.value
+    ? getBaseCampanha(jogoSelecionado.value)
+    : { valorNumerico: 0, apoiadores: 0, metaNumerico: 0 }
 )
 const contribuicoesJogo = computed(() =>
-  jogoSelecionado.value ? getExtra(jogoSelecionado.value) : { valorExtra: 0, apoiadoresExtra: 0 }
+  jogoSelecionado.value
+    ? getExtra(jogoSelecionado.value)
+    : { valorExtra: 0, apoiadoresExtra: 0 }
 )
 const totalValorDisplay = computed(() => baseCampanha.value.valorNumerico + contribuicoesJogo.value.valorExtra)
 const valorArrecadadoDisplay = computed(() => formatarMoeda(totalValorDisplay.value))
@@ -363,46 +372,23 @@ const metaNumericoDisplay = computed(() =>
 const metaFormatada = computed(() =>
   metaNumericoDisplay.value > 0 ? formatarMoeda(metaNumericoDisplay.value) : (jogoAtual.value?.metaValor || '—')
 )
-const percentualMetaDisplay = computed(() => {
-  const metaNum = metaNumericoDisplay.value
-  if (metaNum <= 0) return 0
-  const total = totalValorDisplay.value
-  return Math.min(100, Math.round((total / metaNum) * 100))
-})
-
-const posts = computed(() => {
-  const base = getDetalhesJogo(jogoSelecionado.value).atualizacoes
-  const devPosts = getPostsDev(jogoSelecionado.value)
-  return [...devPosts, ...base]
-})
-
-const fotosDosPosts = computed(() => {
-  return posts.value.flatMap((p) =>
-    p.imagem ? [{ src: p.imagem, titulo: p.titulo }] : []
-  )
-})
-
-const fotoModal = ref<{ src: string; titulo: string } | null>(null)
-function abrirFotoModal (foto: { src: string; titulo: string }) {
-  fotoModal.value = foto
-}
-function fecharFotoModal () {
-  fotoModal.value = null
-}
-
-const escapeHandler = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') fecharFotoModal()
-}
-watch(fotoModal, (aberto) => {
-  if (aberto) {
-    window.addEventListener('keydown', escapeHandler)
-  } else {
-    window.removeEventListener('keydown', escapeHandler)
-  }
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', escapeHandler)
-})
+const percentualMetaDisplay = computed(() =>
+  metaNumericoDisplay.value <= 0
+    ? 0
+    : Math.min(100, Math.round((totalValorDisplay.value / metaNumericoDisplay.value) * 100))
+)
+const posts = computed(() => [
+  ...getPostsDev(jogoSelecionado.value),
+  ...getDetalhesJogo(jogoSelecionado.value).atualizacoes
+])
+const fotosDosPosts = computed<FotoPost[]>(() =>
+  posts.value.flatMap(post => post.imagem ? [{ src: post.imagem, titulo: post.titulo }] : [])
+)
+const {
+  itemSelecionado: fotoModal,
+  abrir: abrirFotoModal,
+  fechar: fecharFotoModal
+} = useModal<FotoPost>()
 
 function abrirModalCriar () {
   jogoParaEditar.value = null
@@ -414,43 +400,23 @@ function abrirModalEditar (jogo: JogoDev) {
   modalAberto.value = true
 }
 
-function onSalvarJogo (payload: JogoDev | (Omit<JogoDev, 'id'>)) {
-  if ('id' in payload && payload.id) {
-    updateJogo(payload.id, payload)
-  } else {
-    const novo = addJogo(payload)
-    jogoSelecionado.value = novo.id
-  }
+async function onSalvarJogo (payload: JogoDev | Omit<JogoDev, 'id'>) {
+  if ('id' in payload && payload.id) await updateJogo(payload.id, payload)
+  else jogoSelecionado.value = (await addJogo(payload)).id
 }
 
 function formatarDataAgora () {
-  const d = new Date()
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const dia = d.getDate()
-  const mes = d.getMonth() + 1
-  const ano = d.getFullYear()
-  return `${dia}/${mes}/${ano} às ${h.toString().padStart(2, '0')}h${m.toString().padStart(2, '0')}`
+  const data = new Date()
+  return `${data.getDate()}/${data.getMonth() + 1}/${data.getFullYear()} às ${data.getHours().toString().padStart(2, '0')}h${data.getMinutes().toString().padStart(2, '0')}`
 }
 
-function onNovoPost (payload: { titulo: string; descricao: string; imagem?: string }) {
+async function onNovoPost (payload: { titulo: string, descricao: string, imagem?: string }) {
   if (!jogoSelecionado.value) return
-  addPostDev(jogoSelecionado.value, {
-    titulo: payload.titulo,
-    descricao: payload.descricao,
-    imagem: payload.imagem,
-    data: formatarDataAgora()
-  })
+  await addPostDev(jogoSelecionado.value, { ...payload, data: formatarDataAgora() })
 }
+
+await refreshJogos()
 </script>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>
+
+<style scoped src="../assets/css/pages/area-dev.css"></style>
