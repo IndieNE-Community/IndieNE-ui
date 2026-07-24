@@ -5,7 +5,13 @@
         <!-- Cabeçalho do desenvolvedor -->
         <header class="mb-10">
           <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
-            <div class="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-zinc-800" />
+            <div class="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-zinc-800">
+              <img
+                :src="getAvatarUrl(desenvolvedor)"
+                :alt="desenvolvedor ?? 'Desenvolvedor'"
+                class="h-full w-full object-cover"
+              >
+            </div>
             <div class="min-w-0">
               <h1 class="text-3xl font-bold text-white">
                 {{ desenvolvedor }}
@@ -92,6 +98,7 @@ import { slugify } from '~/utils/slug'
 const route = useRoute()
 const slug = computed(() => (route.params.slug as string) ?? '')
 const { allJogos } = useJogos()
+const { getAvatarUrl } = useAvatar()
 const jogosDoDesenvolvedor = computed(() =>
   slug.value ? allJogos.value.filter(jogo => slugify(jogo.desenvolvedor) === slug.value) : []
 )

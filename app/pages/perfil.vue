@@ -2,12 +2,21 @@
   <div class="min-h-screen bg-dark">
     <div class="mx-auto max-w-xl px-6 py-12 sm:px-8">
       <div class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-8">
-        <h1 class="text-2xl font-bold text-white">
-          Meu perfil
-        </h1>
-        <p class="mt-2 text-sm text-muted">
-          Dados da sua conta.
-        </p>
+        <div class="flex items-center gap-4">
+          <img
+            :src="getAvatarUrl(user?.nome)"
+            :alt="user?.nome ?? 'Avatar'"
+            class="h-16 w-16 shrink-0 rounded-full bg-zinc-800 object-cover"
+          >
+          <div>
+            <h1 class="text-2xl font-bold text-white">
+              Meu perfil
+            </h1>
+            <p class="mt-1 text-sm text-muted">
+              Dados da sua conta.
+            </p>
+          </div>
+        </div>
 
         <div class="mt-8 space-y-4">
           <div>
@@ -49,6 +58,7 @@ definePageMeta({ layout: 'default', middleware: 'auth' })
 
 const router = useRouter()
 const { user, logout } = useAuth()
+const { getAvatarUrl } = useAvatar()
 
 function sair () {
   logout()
