@@ -7,6 +7,12 @@
       <p class="mt-2 text-muted">
         Estúdios e criadores com jogos na IndieNE.
       </p>
+      <p v-if="loading" class="mt-8 text-center text-zinc-400" role="status">Carregando desenvolvedores...</p>
+      <div v-else-if="error" class="mt-8 text-center">
+        <p class="text-red-400">{{ error }}</p>
+        <button type="button" class="mt-4 text-primary hover:underline" @click="refresh(true)">Tentar novamente</button>
+      </div>
+      <p v-else-if="!desenvolvedoresUnicos.length" class="mt-8 text-center text-zinc-500">Nenhum desenvolvedor publicado.</p>
       <ul class="mt-8 flex flex-col gap-2">
         <li
           v-for="nome in desenvolvedoresUnicos"
@@ -26,17 +32,16 @@
 </template>
 
 <script setup lang="ts">
-// TODO(API): montar a lista de desenvolvedores a partir dos jogos retornados pela API.
-
-import { jogos } from '~/data/jogos'
 import { slugify } from '~/utils/slug'
 
+const { allJogos, loading, error, refresh } = useJogos()
 const desenvolvedoresUnicos = computed(() =>
-  Array.from(new Set(jogos.map(jogo => jogo.desenvolvedor))).sort()
+  Array.from(new Set(allJogos.value.map(jogo => jogo.desenvolvedor))).sort()
 )
 
 function qtdeJogos (nome: string) {
-  return jogos.filter(jogo => jogo.desenvolvedor === nome).length
+  return allJogos.value.filter(jogo => jogo.desenvolvedor === nome).length
 }
 
+await refresh()
 </script>

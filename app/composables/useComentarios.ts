@@ -1,55 +1,66 @@
-import type { Comentario } from '~/types/comentario.interface'
+import type { ApiComentario, Comentario } from '~/types/comentario.interface'
+import { useComentarioService } from '~/services/comentario.service'
 
-// TODO(API): substituir a leitura e persistência em localStorage por ComentarioService.
-const STORAGE_KEY = 'indiene_comentarios'
-type ComentariosPorJogo = Record<string, Record<number, Comentario[]>>
-
-function getAvatarUrl (usuario: string): string {
+export function getAvatarUrl (usuario: string): string {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(usuario)}`
 }
 
-function deserializeComentarios (value: string): ComentariosPorJogo {
-  const parsed = JSON.parse(value) as Record<string, Record<string, Comentario[]>>
-  const comentarios: ComentariosPorJogo = {}
-
-  for (const [jogoId, comentariosPorAtualizacao] of Object.entries(parsed)) {
-    comentarios[jogoId] = {}
-    for (const [indice, lista] of Object.entries(comentariosPorAtualizacao ?? {})) {
-      comentarios[jogoId][Number(indice)] = lista.map(comentario => ({
-        ...comentario,
-        avatar: comentario.avatar || getAvatarUrl(comentario.usuario)
-      }))
-    }
+function mapComentario (comentario: ApiComentario, usuarioAtual?: { id?: string, nome?: string }): Comentario {
+  const ehUsuarioAtual = usuarioAtual?.id === comentario.usuarioId
+  const nome = ehUsuarioAtual && usuarioAtual?.nome
+    ? usuarioAtual.nome
+    : `Apoiador ${comentario.usuarioId.slice(0, 8)}`
+  return {
+    id: comentario.id,
+    usuarioId: comentario.usuarioId,
+    usuario: nome,
+    texto: comentario.texto,
+    avatar: getAvatarUrl(nome),
+    likes: comentario.likes ?? 0,
+    dislikes: comentario.dislikes ?? 0
   }
-
-  return comentarios
 }
 
 export function useComentarios () {
-  const data = useLocalStorageState<ComentariosPorJogo>(STORAGE_KEY, {
-    defaultValue: () => ({}),
-    deserialize: deserializeComentarios
-  })
+  const data = useState<Record<number, Comentario[]>>('comentarios-api', () => ({}))
+  const loading = useState<Record<number, boolean>>('comentarios-loading', () => ({}))
+  const errors = useState<Record<number, string>>('comentarios-errors', () => ({}))
+  const submitting = useState<Record<number, boolean>>('comentarios-submitting', () => ({}))
+  const comentarioService = useComentarioService()
+  const { user } = useAuth()
 
-  function getComentarios (jogoId: string, atualizacaoIdx: number): Comentario[] {
-    return data.value[jogoId]?.[atualizacaoIdx] ?? []
+  function getComentarios (postagemId: number): Comentario[] {
+    return data.value[postagemId] ?? []
   }
 
-  function addComentario (jogoId: string, atualizacaoIdx: number, usuario: string, texto: string) {
-    const nome = usuario.trim() || 'Anônimo'
+  async function refresh (postagemId: number) {
+    loading.value[postagemId] = true
+    delete errors.value[postagemId]
+    try {
+      const page = await comentarioService.listar(postagemId, { size: 100, sort: 'data,asc' })
+      data.value[postagemId] = page.content.map(item => mapComentario(item, user.value ?? undefined))
+    } catch (cause) {
+      errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível carregar os comentários.'
+    } finally {
+      loading.value[postagemId] = false
+    }
+  }
+
+  async function addComentario (postagemId: number, texto: string) {
     const conteudo = texto.trim()
     if (!conteudo) return
-
-    if (!data.value[jogoId]) data.value[jogoId] = {}
-    if (!data.value[jogoId][atualizacaoIdx]) data.value[jogoId][atualizacaoIdx] = []
-    data.value[jogoId][atualizacaoIdx].push({
-      usuario: nome,
-      texto: conteudo,
-      avatar: getAvatarUrl(nome),
-      likes: 0,
-      dislikes: 0
-    })
+    submitting.value[postagemId] = true
+    delete errors.value[postagemId]
+    try {
+      const created = await comentarioService.criar({ postagemId, texto: conteudo })
+      data.value[postagemId] = [...getComentarios(postagemId), mapComentario(created, user.value ?? undefined)]
+    } catch (cause) {
+      errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível enviar o comentário.'
+      throw cause
+    } finally {
+      submitting.value[postagemId] = false
+    }
   }
 
-  return { getComentarios, addComentario, getAvatarUrl }
+  return { getComentarios, refresh, addComentario, loading, errors, submitting, getAvatarUrl }
 }

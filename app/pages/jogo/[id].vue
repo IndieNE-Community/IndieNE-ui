@@ -1,6 +1,16 @@
 <template>
   <div class="min-h-screen bg-dark">
-    <div class="mx-auto max-w-7xl px-6 py-8 sm:px-8 lg:px-12">
+    <div v-if="loading" class="mx-auto max-w-3xl px-6 py-24 text-center text-zinc-400" role="status">
+      Carregando detalhes do jogo...
+    </div>
+    <div v-else-if="error" class="mx-auto max-w-3xl px-6 py-24 text-center">
+      <h1 class="text-2xl font-bold text-white">Não foi possível carregar o jogo</h1>
+      <p class="mt-3 text-red-400">{{ error }}</p>
+      <button type="button" class="mt-6 rounded-lg bg-primary px-5 py-2.5 font-medium text-dark" @click="carregar">
+        Tentar novamente
+      </button>
+    </div>
+    <div v-else class="mx-auto max-w-7xl px-6 py-8 sm:px-8 lg:px-12">
       <div class="flex flex-col gap-8 lg:flex-row lg:gap-12">
         <!-- Coluna principal: hero + atualizações -->
         <div class="min-w-0 flex-1">
@@ -30,7 +40,7 @@
             <div class="mt-6 flex flex-col gap-6">
               <article
                 v-for="(atualizacao, idx) in jogo.atualizacoes"
-                :key="idx"
+                :key="atualizacao.id ?? idx"
                 class="rounded-xl border border-primary/50 bg-zinc-900/50 p-6"
               >
                 <h3 class="text-lg font-bold text-white">
@@ -119,6 +129,9 @@
                       </div>
                     </div>
                   </div>
+                  <p v-if="comentarioErro(idx)" class="text-sm text-red-400" role="alert">
+                    {{ comentarioErro(idx) }}
+                  </p>
                   <form
                     v-if="isLoggedIn"
                     class="flex items-end gap-3"
@@ -137,9 +150,10 @@
                     >
                     <button
                       type="submit"
+                      :disabled="comentarioLoading(idx)"
                       class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-dark transition hover:bg-primary/90"
                     >
-                      Enviar
+                      {{ comentarioLoading(idx) ? 'Enviando...' : 'Enviar' }}
                     </button>
                   </form>
                   <p v-else class="rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-3 text-sm text-zinc-500">
@@ -291,12 +305,17 @@
 import { useJogoDetalhes } from '~/composables/useJogoDetalhes'
 
 const {
-  id, jogo, slugDev, comentariosPorAtualizacao, totalLikes, totalDislikes,
+  id, jogo, loading, error, carregar, slugDev, comentariosPorAtualizacao, totalLikes, totalDislikes,
   reacaoAtual, reagir, getForm, enviarComentario, isLoggedIn,
+  comentarioLoading, comentarioErro,
   avatarUsuarioAtual, totalApoiadores, valorArrecadadoFormatado,
   percentualMeta, formatarMoeda, fotosDosPosts, fotoModal,
   abrirFotoModal, fecharFotoModal
 } = useJogoDetalhes()
+
+await carregar()
 </script>
 
 <style scoped src="../../assets/css/pages/jogo-detalhes.css"></style>
+                      :disabled="comentarioLoading(idx)"
+                      aria-label="Texto do comentário"

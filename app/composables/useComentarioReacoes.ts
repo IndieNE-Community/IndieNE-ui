@@ -1,45 +1,56 @@
-// TODO(API): substituir as reações em localStorage por CurtidaService.
-const STORAGE_KEY = 'indiene_comentario_reacoes'
+import type { ApiCurtida } from '~/types/curtida.interface'
+import { useCurtidaService } from '~/services/curtida.service'
 
 type Reacao = 'like' | 'dislike'
-type ReacoesPorComentario = Record<string, Record<string, Reacao>>
-
-function comentarioKey (jogoId: string, atualizacaoIdx: number, comentarioIdx: number) {
-  return `${jogoId}:${atualizacaoIdx}:${comentarioIdx}`
-}
 
 export function useComentarioReacoes () {
-  const data = useLocalStorageState<ReacoesPorComentario>(STORAGE_KEY, { defaultValue: () => ({}) })
+  const reacoes = useState<Record<number, ApiCurtida[]>>('comentario-reacoes-api', () => ({}))
+  const loading = useState<Record<number, boolean>>('comentario-reacoes-loading', () => ({}))
+  const errors = useState<Record<number, string>>('comentario-reacoes-errors', () => ({}))
+  const curtidaService = useCurtidaService()
   const { user } = useAuth()
 
-  function getTotais (jogoId: string, atualizacaoIdx: number, comentarioIdx: number) {
-    const reacoes = data.value[comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)]
-    if (!reacoes) return { likes: 0, dislikes: 0 }
-
-    return Object.values(reacoes).reduce(
-      (totais, reacao) => {
-        totais[reacao === 'like' ? 'likes' : 'dislikes']++
-        return totais
-      },
-      { likes: 0, dislikes: 0 }
-    )
+  function getMinhaReacao (comentarioId: number): Reacao | null {
+    const atual = reacoes.value[comentarioId]?.find(item => item.usuarioId === user.value?.id)
+    return atual?.tipo === 'dislike' ? 'dislike' : atual ? 'like' : null
   }
 
-  function getMinhaReacao (jogoId: string, atualizacaoIdx: number, comentarioIdx: number): Reacao | null {
-    const email = user.value?.email
-    if (!email) return null
-    return data.value[comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)]?.[email] ?? null
+  async function refresh (comentarioId: number) {
+    loading.value[comentarioId] = true
+    delete errors.value[comentarioId]
+    try {
+      const page = await curtidaService.listar({ comentarioId, size: 100 })
+      reacoes.value[comentarioId] = page.content
+    } catch (cause) {
+      errors.value[comentarioId] = cause instanceof Error ? cause.message : 'Não foi possível carregar as reações.'
+    } finally {
+      loading.value[comentarioId] = false
+    }
   }
 
-  function setReacao (jogoId: string, atualizacaoIdx: number, comentarioIdx: number, tipo: Reacao) {
-    const email = user.value?.email
-    if (!email) return
-
-    const key = comentarioKey(jogoId, atualizacaoIdx, comentarioIdx)
-    if (!data.value[key]) data.value[key] = {}
-    if (data.value[key][email] === tipo) delete data.value[key][email]
-    else data.value[key][email] = tipo
+  async function setReacao (comentarioId: number, tipo: Reacao) {
+    if (!user.value) return
+    loading.value[comentarioId] = true
+    delete errors.value[comentarioId]
+    try {
+      const atual = reacoes.value[comentarioId]?.find(item => item.usuarioId === user.value?.id)
+      if (atual) await curtidaService.remover(atual.id)
+      if (!atual || atual.tipo !== tipo) {
+        const created = await curtidaService.criar({ comentarioId, tipo })
+        reacoes.value[comentarioId] = [
+          ...(reacoes.value[comentarioId] ?? []).filter(item => item.id !== atual?.id),
+          created
+        ]
+      } else {
+        reacoes.value[comentarioId] = (reacoes.value[comentarioId] ?? []).filter(item => item.id !== atual.id)
+      }
+    } catch (cause) {
+      errors.value[comentarioId] = cause instanceof Error ? cause.message : 'Não foi possível registrar a reação.'
+      throw cause
+    } finally {
+      loading.value[comentarioId] = false
+    }
   }
 
-  return { getTotais, getMinhaReacao, setReacao }
+  return { getMinhaReacao, refresh, setReacao, loading, errors }
 }

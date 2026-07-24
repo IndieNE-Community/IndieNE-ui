@@ -22,10 +22,17 @@
               {{ user?.email ?? '—' }}
             </p>
           </div>
+          <div>
+            <span class="text-sm text-muted">Tipo de perfil</span>
+            <p class="mt-1 text-white">
+              {{ user?.tipo === 'DESENVOLVEDOR' ? 'Desenvolvedor' : 'Usuário comum' }}
+            </p>
+          </div>
         </div>
 
         <div class="mt-10 flex flex-col gap-3 sm:flex-row">
           <NuxtLink
+            v-if="isDeveloper"
             to="/area-dev"
             class="rounded-lg bg-primary px-6 py-3 text-center text-sm font-medium text-dark transition hover:bg-primary/90"
           >
@@ -48,7 +55,7 @@
 definePageMeta({ layout: 'default', middleware: 'auth' })
 
 const router = useRouter()
-const { user, logout } = useAuth()
+const { user, isDeveloper, logout } = useAuth()
 
 function sair () {
   logout()

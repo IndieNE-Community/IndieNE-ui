@@ -1,9 +1,8 @@
-// TODO(API): buscar jogo, campanha, atualizações e comentários por ID; hoje parte dos detalhes ainda é local.
-import type { Comentario } from '~/types/comentario.interface'
-import { getDetalhesJogo } from '~/data/jogo-detalhes'
-import { getBaseCampanha } from '~/utils/campanha'
+import type { Atualizacao } from '~/types/jogo-detalhes.interface'
+import { useImagemService } from '~/services/imagem.service'
+import { useJogoService } from '~/services/jogo.service'
+import { usePostagemService } from '~/services/postagem.service'
 import { formatarMoeda } from '~/utils/moeda'
-import { jogos } from '~/data/jogos'
 import { slugify } from '~/utils/slug'
 
 interface FotoPost {
@@ -11,177 +10,163 @@ interface FotoPost {
   titulo: string
 }
 
+const jogoVazio = () => ({
+  titulo: '',
+  descricao: '',
+  tags: [] as string[],
+  desenvolvedor: '',
+  hero: '',
+  valorArrecadado: 0,
+  apoiadores: 0,
+  dias: 0,
+  metaPercentual: 0,
+  metaValor: 0,
+  fotos: [] as string[],
+  atualizacoes: [] as Atualizacao[]
+})
+
 export function useJogoDetalhes () {
   const route = useRoute()
   const id = computed(() => route.params.id as string)
-
+  const jogo = ref(jogoVazio())
+  const loading = ref(false)
+  const error = ref<string | null>(null)
   const { user, isLoggedIn } = useAuth()
-  const { getComentarios, addComentario, getAvatarUrl } = useComentarios()
-  const { getTotais: getReacoesTotais, getMinhaReacao, setReacao } = useComentarioReacoes()
-  const { getExtra } = useContribuicoes()
-  const { getPosts: getPostsDev } = usePostsDev()
-  const { getJogoById } = useMeusJogos()
+  const jogoService = useJogoService()
+  const postagemService = usePostagemService()
+  const imagemService = useImagemService()
+  const comentarios = useComentarios()
+  const reacoes = useComentarioReacoes()
 
-  const jogo = computed(() => {
-    const item = jogos.find(jogo => jogo.id === id.value)
-    const detalhes = getDetalhesJogo(id.value)
-    const jogoDoUsuario = getJogoById(id.value)
-
-    if (!item) {
-      return {
-        titulo: 'Jogo não encontrado',
-        descricao: '',
-        tags: [] as string[],
-        desenvolvedor: '',
-        hero: '',
-        valorArrecadado: 0,
-        apoiadores: 0,
-        dias: 0,
-        metaPercentual: 0,
-        metaValor: 0,
-        fotos: [] as string[],
-        atualizacoes: [] as {
-          titulo: string
-          data: string
-          descricao: string
-          imagem: string
-          comentarios: { usuario: string, texto: string, likes: number, dislikes: number }[]
-        }[]
+  async function carregar () {
+    const jogoId = Number(id.value)
+    if (!Number.isInteger(jogoId) || jogoId <= 0) {
+      error.value = 'Jogo inválido.'
+      return
+    }
+    loading.value = true
+    error.value = null
+    try {
+      const [apiJogo, imagensJogo, paginaPosts] = await Promise.all([
+        jogoService.buscar(jogoId),
+        imagemService.listar({ jogoId }),
+        postagemService.listar({ size: 100, sort: 'data,desc' })
+      ])
+      // TODO(API): usar GET /publicacoes?jogoId quando o backend oferecer o filtro.
+      const posts = paginaPosts.content.filter(post => post.jogoId === jogoId)
+      const atualizacoes = await Promise.all(posts.map(async (post): Promise<Atualizacao> => {
+        const imagens = await imagemService.listar({ postagemId: post.id })
+        await comentarios.refresh(post.id)
+        await Promise.all(comentarios.getComentarios(post.id).map(item => reacoes.refresh(item.id)))
+        return {
+          id: post.id,
+          titulo: post.titulo,
+          descricao: post.descricao ?? '',
+          data: new Date(post.data).toLocaleString('pt-BR'),
+          imagem: imagens[0]?.imagem,
+          comentarios: []
+        }
+      }))
+      const fotos = imagensJogo.map(item => item.imagem)
+      jogo.value = {
+        titulo: apiJogo.titulo,
+        descricao: apiJogo.descricao ?? '',
+        tags: apiJogo.generos ?? [],
+        desenvolvedor: apiJogo.desenvolvedor || 'Desenvolvedor independente',
+        hero: apiJogo.imgThumb || fotos[0] || '',
+        valorArrecadado: apiJogo.totalArrecadado ?? 0,
+        apoiadores: apiJogo.apoiadores ?? 0,
+        dias: apiJogo.diasRestantes ?? apiJogo.campanha ?? 0,
+        metaPercentual: apiJogo.metaPercentual ?? 0,
+        metaValor: apiJogo.metaFinanceira ?? 0,
+        fotos,
+        atualizacoes
       }
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : 'Não foi possível carregar o jogo.'
+      jogo.value = jogoVazio()
+    } finally {
+      loading.value = false
     }
-
-    return {
-      titulo: item.title,
-      descricao: jogoDoUsuario?.descricao ?? detalhes.descricao,
-      tags: item.genero,
-      desenvolvedor: item.desenvolvedor,
-      hero: jogoDoUsuario?.thumb ?? item.thumb ?? '',
-      valorArrecadado: detalhes.valorArrecadado,
-      apoiadores: detalhes.apoiadores,
-      dias: detalhes.dias,
-      metaPercentual: item.metaPercentual,
-      metaValor: detalhes.metaValor,
-      fotos: detalhes.fotos,
-      atualizacoes: [...getPostsDev(id.value), ...detalhes.atualizacoes]
-    }
-  })
+  }
 
   const slugDev = computed(() => slugify(jogo.value.desenvolvedor))
-
-  function comentariosPorAtualizacao (atualizacaoIdx: number): Comentario[] {
-    const comentariosBase = jogo.value.atualizacoes[atualizacaoIdx]?.comentarios ?? []
-    const comentariosComAvatar = comentariosBase.map(comentario => ({
-      usuario: comentario.usuario,
-      texto: comentario.texto,
-      avatar: getAvatarUrl(comentario.usuario),
-      likes: comentario.likes,
-      dislikes: comentario.dislikes
-    }))
-    const comentariosSalvos = getComentarios(id.value, atualizacaoIdx)
-
-    return [...comentariosComAvatar, ...comentariosSalvos]
-  }
-
-  function totalLikes (atualizacaoIdx: number, comentarioIdx: number): number {
-    const comentario = comentariosPorAtualizacao(atualizacaoIdx)[comentarioIdx]
-    if (!comentario) return 0
-
-    const extra = getReacoesTotais(id.value, atualizacaoIdx, comentarioIdx)
-    return comentario.likes + extra.likes
-  }
-
-  function totalDislikes (atualizacaoIdx: number, comentarioIdx: number): number {
-    const comentario = comentariosPorAtualizacao(atualizacaoIdx)[comentarioIdx]
-    if (!comentario) return 0
-
-    const extra = getReacoesTotais(id.value, atualizacaoIdx, comentarioIdx)
-    return comentario.dislikes + extra.dislikes
-  }
-
-  function reacaoAtual (atualizacaoIdx: number, comentarioIdx: number) {
-    return getMinhaReacao(id.value, atualizacaoIdx, comentarioIdx)
-  }
-
-  function reagir (atualizacaoIdx: number, comentarioIdx: number, tipo: 'like' | 'dislike') {
-    setReacao(id.value, atualizacaoIdx, comentarioIdx, tipo)
-  }
-
   const comentarioForms = ref<Record<number, { texto: string }>>({})
-  watch(
-    () => jogo.value.atualizacoes.length,
-    (quantidade) => {
-      const formularios: Record<number, { texto: string }> = {}
-      for (let idx = 0; idx < quantidade; idx++) {
-        formularios[idx] = comentarioForms.value[idx] ?? { texto: '' }
-      }
-      comentarioForms.value = formularios
-    },
-    { immediate: true }
-  )
+
+  function postagemId (atualizacaoIdx: number): number | undefined {
+    return jogo.value.atualizacoes[atualizacaoIdx]?.id
+  }
+
+  function comentariosPorAtualizacao (atualizacaoIdx: number) {
+    const idPostagem = postagemId(atualizacaoIdx)
+    return idPostagem ? comentarios.getComentarios(idPostagem) : []
+  }
 
   function getForm (idx: number) {
-    return comentarioForms.value[idx] ?? { texto: '' }
+    comentarioForms.value[idx] ??= { texto: '' }
+    return comentarioForms.value[idx]
   }
 
-  function enviarComentario (idx: number) {
+  async function enviarComentario (idx: number) {
+    const idPostagem = postagemId(idx)
     const formulario = getForm(idx)
-    const texto = formulario.texto.trim()
-    if (!texto) return
-
-    const nome = user.value?.nome || user.value?.email || 'Anônimo'
-    addComentario(id.value, idx, nome, texto)
+    if (!idPostagem || !formulario.texto.trim()) return
+    await comentarios.addComentario(idPostagem, formulario.texto)
     formulario.texto = ''
   }
 
+  function comentarioPorIndice (atualizacaoIdx: number, comentarioIdx: number) {
+    return comentariosPorAtualizacao(atualizacaoIdx)[comentarioIdx]
+  }
+
+  function totalLikes (atualizacaoIdx: number, comentarioIdx: number) {
+    return comentarioPorIndice(atualizacaoIdx, comentarioIdx)?.likes ?? 0
+  }
+
+  function totalDislikes (atualizacaoIdx: number, comentarioIdx: number) {
+    return comentarioPorIndice(atualizacaoIdx, comentarioIdx)?.dislikes ?? 0
+  }
+
+  function reacaoAtual (atualizacaoIdx: number, comentarioIdx: number) {
+    const comentario = comentarioPorIndice(atualizacaoIdx, comentarioIdx)
+    return comentario ? reacoes.getMinhaReacao(comentario.id) : null
+  }
+
+  async function reagir (atualizacaoIdx: number, comentarioIdx: number, tipo: 'like' | 'dislike') {
+    const comentario = comentarioPorIndice(atualizacaoIdx, comentarioIdx)
+    const idPostagem = postagemId(atualizacaoIdx)
+    if (!comentario || !idPostagem) return
+    await reacoes.setReacao(comentario.id, tipo)
+    await comentarios.refresh(idPostagem)
+  }
+
   const avatarUsuarioAtual = computed(() =>
-    user.value?.nome
-      ? getAvatarUrl(user.value.nome)
-      : 'https://api.dicebear.com/7.x/avataaars/svg?seed=anon'
+    comentarios.getAvatarUrl(user.value?.nome || user.value?.email || 'anon')
   )
+  const totalApoiadores = computed(() => jogo.value.apoiadores)
+  const valorArrecadadoFormatado = computed(() => formatarMoeda(jogo.value.valorArrecadado))
+  const percentualMeta = computed(() => jogo.value.metaPercentual)
+  const fotosDosPosts = computed<FotoPost[]>(() => [
+    ...jogo.value.fotos.map((src, indice) => ({ src, titulo: `${jogo.value.titulo} — imagem ${indice + 1}` })),
+    ...jogo.value.atualizacoes.flatMap(post => post.imagem ? [{ src: post.imagem, titulo: post.titulo }] : [])
+  ])
+  const { itemSelecionado: fotoModal, abrir: abrirFotoModal, fechar: fecharFotoModal } = useModal<FotoPost>()
 
-  const baseCampanha = computed(() => getBaseCampanha(id.value))
-  const contribuicoesExtras = computed(() => getExtra(id.value))
-  const totalValor = computed(() => baseCampanha.value.valorNumerico + contribuicoesExtras.value.valorExtra)
-  const totalApoiadores = computed(() => baseCampanha.value.apoiadores + contribuicoesExtras.value.apoiadoresExtra)
-  const valorArrecadadoFormatado = computed(() => formatarMoeda(totalValor.value))
-  const percentualMeta = computed(() => {
-    if (totalValor.value <= 0) return jogo.value.metaPercentual
-    if (baseCampanha.value.metaNumerico <= 0) return 0
+  function comentarioLoading (idx: number) {
+    const idPostagem = postagemId(idx)
+    return idPostagem ? Boolean(comentarios.submitting.value[idPostagem]) : false
+  }
 
-    return Math.min(100, Math.round((totalValor.value / baseCampanha.value.metaNumerico) * 100))
-  })
-
-  const fotosDosPosts = computed<FotoPost[]>(() =>
-    jogo.value.atualizacoes.flatMap(atualizacao =>
-      atualizacao.imagem ? [{ src: atualizacao.imagem, titulo: atualizacao.titulo }] : []
-    )
-  )
-  const {
-    itemSelecionado: fotoModal,
-    abrir: abrirFotoModal,
-    fechar: fecharFotoModal
-  } = useModal<FotoPost>()
+  function comentarioErro (idx: number) {
+    const idPostagem = postagemId(idx)
+    return idPostagem ? comentarios.errors.value[idPostagem] : undefined
+  }
 
   return {
-    id,
-    jogo,
-    slugDev,
-    comentariosPorAtualizacao,
-    totalLikes,
-    totalDislikes,
-    reacaoAtual,
-    reagir,
-    getForm,
-    enviarComentario,
-    isLoggedIn,
-    avatarUsuarioAtual,
-    totalApoiadores,
-    valorArrecadadoFormatado,
-    percentualMeta,
-    formatarMoeda,
-    fotosDosPosts,
-    fotoModal,
-    abrirFotoModal,
-    fecharFotoModal
+    id, jogo, loading, error, carregar, slugDev, comentariosPorAtualizacao,
+    totalLikes, totalDislikes, reacaoAtual, reagir, getForm, enviarComentario,
+    comentarioLoading, comentarioErro, isLoggedIn, avatarUsuarioAtual,
+    totalApoiadores, valorArrecadadoFormatado, percentualMeta, formatarMoeda,
+    fotosDosPosts, fotoModal, abrirFotoModal, fecharFotoModal
   }
 }

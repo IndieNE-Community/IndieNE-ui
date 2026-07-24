@@ -1,5 +1,6 @@
 import { useAuthService } from '~/services/auth.service'
 import { useUsuarioService } from '~/services/usuario.service'
+import type { ApiUser } from '~/types/user.interface'
 
 export function useAuth () {
   const authCookie = useAuthSession()
@@ -8,6 +9,7 @@ export function useAuth () {
 
   const user = computed(() => authCookie.value?.user ?? null)
   const isLoggedIn = computed(() => Boolean(authCookie.value?.token && authCookie.value.expiresAt > Date.now()))
+  const isDeveloper = computed(() => user.value?.tipo === 'DESENVOLVEDOR')
 
   async function login (email: string, senha: string) {
     try {
@@ -23,13 +25,13 @@ export function useAuth () {
     }
   }
 
-  async function register (nome: string, email: string, senha: string) {
+  async function register (nome: string, email: string, senha: string, tipo: ApiUser['tipo']) {
     try {
       await usuarioService.cadastrar({
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
         senha,
-        tipo: 'DESENVOLVEDOR'
+        tipo
       })
       return await login(email, senha)
     } catch (error) {
@@ -39,5 +41,5 @@ export function useAuth () {
 
   function logout () { authCookie.value = null }
 
-  return { user, isLoggedIn, login, register, logout }
+  return { user, isLoggedIn, isDeveloper, login, register, logout }
 }

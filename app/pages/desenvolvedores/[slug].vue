@@ -1,7 +1,12 @@
 <template>
   <div class="min-h-screen bg-dark">
     <div class="mx-auto max-w-5xl px-6 py-8 sm:px-8 lg:px-12">
-      <template v-if="desenvolvedor">
+      <p v-if="loading" class="py-16 text-center text-zinc-400" role="status">Carregando desenvolvedor...</p>
+      <div v-else-if="error" class="py-16 text-center">
+        <p class="text-red-400">{{ error }}</p>
+        <button type="button" class="mt-4 text-primary hover:underline" @click="refresh(true)">Tentar novamente</button>
+      </div>
+      <template v-else-if="desenvolvedor">
         <!-- Cabeçalho do desenvolvedor -->
         <header class="mb-10">
           <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
@@ -91,10 +96,11 @@ import { slugify } from '~/utils/slug'
 
 const route = useRoute()
 const slug = computed(() => (route.params.slug as string) ?? '')
-const { allJogos } = useJogos()
+const { allJogos, loading, error, refresh } = useJogos()
 const jogosDoDesenvolvedor = computed(() =>
   slug.value ? allJogos.value.filter(jogo => slugify(jogo.desenvolvedor) === slug.value) : []
 )
 const desenvolvedor = computed(() => jogosDoDesenvolvedor.value[0]?.desenvolvedor ?? null)
 
+await refresh()
 </script>
