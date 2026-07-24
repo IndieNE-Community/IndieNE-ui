@@ -17,6 +17,11 @@
           <p v-if="jogoTitulo" class="mt-2 text-lg text-primary">
             {{ jogoTitulo }}
           </p>
+          <p v-if="carregandoJogo" class="mt-2 text-sm text-zinc-400" role="status">Carregando jogo...</p>
+          <div v-else-if="erroJogo" class="mt-4 rounded-lg border border-red-900/60 p-4">
+            <p class="text-sm text-red-400">{{ erroJogo }}</p>
+            <button type="button" class="mt-3 text-sm font-medium text-primary hover:underline" @click="carregarJogo">Tentar novamente</button>
+          </div>
           <p v-else class="mt-2 text-sm text-zinc-500">
             Nenhum jogo selecionado. Volte à página do jogo e clique em Contribuir.
           </p>
@@ -58,6 +63,9 @@
             </div>
 
             <div class="mt-8 border-t border-zinc-700 pt-8">
+              <div class="mb-6 rounded-lg border border-amber-700/60 bg-amber-950/30 p-4 text-sm text-amber-200" role="note">
+                Demonstração acadêmica: nenhum pagamento será processado. Os dados do cartão não são enviados nem armazenados.
+              </div>
               <p class="text-sm font-medium text-white">
                 Dados do cartão
               </p>
@@ -168,67 +176,69 @@
 </template>
 
 <script setup lang="ts">
-import { jogos } from '~/data/jogos'
+import { useJogoService } from '~/services/jogo.service'
 
-definePageMeta({ layout: 'default' })
+type EstadoContribuicao = 'form' | 'processing' | 'success'
 
 const route = useRoute()
 const { addContribuicao } = useContribuicoes()
-
 const valoresPredefinidos = [25, 50, 100]
 const valorSelecionado = ref<number | null>(50)
 const valorCustom = ref<number | ''>('')
-
 const jogoId = computed(() => (route.query.jogo as string) || '')
-const jogoTitulo = computed(() => {
-  const j = jogos.find(j => j.id === jogoId.value)
-  return j?.title ?? ''
-})
-
-const cartao = ref({
-  numero: '',
-  nome: '',
-  validade: '',
-  cvv: ''
-})
-
+const jogoTitulo = ref('')
+const carregandoJogo = ref(false)
+const erroJogo = ref('')
+const jogoService = useJogoService()
+const cartao = ref({ numero: '', nome: '', validade: '', cvv: '' })
 const erro = ref('')
 const loading = ref(false)
-type Estado = 'form' | 'processing' | 'success'
-const estado = ref<Estado>('form')
+const estado = ref<EstadoContribuicao>('form')
 const valorContribuido = ref(0)
 const valorContribuidoFormatado = computed(() =>
   valorContribuido.value > 0 ? `R$ ${valorContribuido.value.toLocaleString('pt-BR')}` : ''
 )
 
-function selecionarValor (v: number) {
-  valorSelecionado.value = v
+async function carregarJogo () {
+  if (!jogoId.value || !Number.isInteger(Number(jogoId.value))) return
+  carregandoJogo.value = true
+  erroJogo.value = ''
+  try {
+    jogoTitulo.value = (await jogoService.buscar(Number(jogoId.value))).titulo
+  } catch (cause) {
+    erroJogo.value = cause instanceof Error ? cause.message : 'Não foi possível carregar o jogo.'
+  } finally {
+    carregandoJogo.value = false
+  }
+}
+
+function selecionarValor (valor: number) {
+  valorSelecionado.value = valor
   valorCustom.value = ''
 }
 
+await carregarJogo()
+
 function formatarNumeroCartao () {
-  let v = cartao.value.numero.replace(/\D/g, '')
-  if (v.length > 16) v = v.slice(0, 16)
-  cartao.value.numero = v.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+  const numero = cartao.value.numero.replace(/\D/g, '').slice(0, 16)
+  cartao.value.numero = numero.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
 }
 
 function formatarValidade () {
-  let v = cartao.value.validade.replace(/\D/g, '')
-  if (v.length >= 2) {
-    v = v.slice(0, 2) + '/' + v.slice(2, 4)
-  }
-  cartao.value.validade = v
+  const validade = cartao.value.validade.replace(/\D/g, '')
+  cartao.value.validade = validade.length >= 2
+    ? `${validade.slice(0, 2)}/${validade.slice(2, 4)}`
+    : validade
 }
 
 function valorFinal (): number {
-  if (valorSelecionado.value != null) return valorSelecionado.value
-  const n = Number(valorCustom.value)
-  return Number.isFinite(n) && n > 0 ? n : 0
+  if (valorSelecionado.value !== null) return valorSelecionado.value
+  const valor = Number(valorCustom.value)
+  return Number.isFinite(valor) && valor > 0 ? valor : 0
 }
 
 function validarCartao (): boolean {
-  const num = cartao.value.numero.replace(/\s/g, '')
-  if (num.length < 13) {
+  if (cartao.value.numero.replace(/\s/g, '').length < 13) {
     erro.value = 'Número do cartão inválido.'
     return false
   }
@@ -236,8 +246,7 @@ function validarCartao (): boolean {
     erro.value = 'Informe o nome no cartão.'
     return false
   }
-  const val = cartao.value.validade
-  if (!/^\d{2}\/\d{2}$/.test(val)) {
+  if (!/^\d{2}\/\d{2}$/.test(cartao.value.validade)) {
     erro.value = 'Validade deve ser MM/AA.'
     return false
   }
@@ -248,9 +257,7 @@ function validarCartao (): boolean {
   return true
 }
 
-const TEMPO_PROCESSAMENTO_MS = 3500
-
-function confirmar () {
+async function confirmar () {
   erro.value = ''
   const valor = valorFinal()
   if (valor <= 0) {
@@ -261,12 +268,15 @@ function confirmar () {
 
   loading.value = true
   estado.value = 'processing'
-  addContribuicao(jogoId.value, valor)
-  valorContribuido.value = valor
-
-  setTimeout(() => {
-    loading.value = false
+  try {
+    await addContribuicao(jogoId.value, valor)
+    valorContribuido.value = valor
     estado.value = 'success'
-  }, TEMPO_PROCESSAMENTO_MS)
+  } catch (e) {
+    estado.value = 'form'
+    erro.value = e instanceof Error ? e.message : 'Não foi possível registrar a contribuição.'
+  } finally {
+    loading.value = false
+  }
 }
 </script>

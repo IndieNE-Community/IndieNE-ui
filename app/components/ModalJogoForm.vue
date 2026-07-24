@@ -6,10 +6,12 @@
       @click.self="emit('update:modelValue', false)"
     >
       <div
+        ref="dialogRef"
         class="max-h-[90vh] w-full overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl sm:max-w-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        tabindex="-1"
       >
         <div class="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-700 bg-zinc-900 px-6 py-4">
           <h2 id="modal-title" class="text-xl font-bold text-white">
@@ -28,8 +30,9 @@
         <form class="space-y-6 p-6" @submit.prevent="onSubmit">
           <div class="grid gap-6 sm:grid-cols-2">
             <div class="sm:col-span-2">
-              <label class="block text-sm font-medium text-white">Título</label>
+              <label for="jogo-titulo" class="block text-sm font-medium text-white">Título</label>
               <input
+                id="jogo-titulo"
                 v-model="form.title"
                 type="text"
                 required
@@ -38,8 +41,9 @@
               >
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-sm font-medium text-white">Descrição (Bio)</label>
+              <label for="jogo-descricao" class="block text-sm font-medium text-white">Descrição (Bio)</label>
               <textarea
+                id="jogo-descricao"
                 v-model="form.descricao"
                 rows="3"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
@@ -47,8 +51,9 @@
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-white">Meta de arrecadação</label>
+              <label for="jogo-meta" class="block text-sm font-medium text-white">Meta de arrecadação</label>
               <input
+                id="jogo-meta"
                 v-model="form.metaValor"
                 type="text"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
@@ -59,8 +64,9 @@
               </p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-white">Dias (campanha)</label>
+              <label for="jogo-dias" class="block text-sm font-medium text-white">Dias (campanha)</label>
               <input
+                id="jogo-dias"
                 v-model.number="form.dias"
                 type="number"
                 min="0"
@@ -68,25 +74,28 @@
               >
             </div>
             <div>
-              <label class="block text-sm font-medium text-white">Data postagem (YYYY-MM)</label>
+              <label for="jogo-data-postagem" class="block text-sm font-medium text-white">Data de início</label>
               <input
+                id="jogo-data-postagem"
                 v-model="form.dataPostagem"
                 type="month"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
               >
             </div>
             <div>
-              <label class="block text-sm font-medium text-white">Data conclusão (YYYY-MM)</label>
+              <label for="jogo-data-conclusao" class="block text-sm font-medium text-white">Data de conclusão</label>
               <input
+                id="jogo-data-conclusao"
                 v-model="form.dataConclusao"
-                type="text"
+                type="month"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
                 placeholder="2025-06 ou vazio"
               >
             </div>
             <div>
-              <label class="block text-sm font-medium text-white">Qtde. jogadores</label>
+              <label for="jogo-jogadores" class="block text-sm font-medium text-white">Quantidade de jogadores</label>
               <input
+                id="jogo-jogadores"
                 v-model="form.qtdeJogadores"
                 type="text"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
@@ -103,14 +112,25 @@
               <label for="compat-controle" class="text-sm text-white">Compatível com controle</label>
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-sm font-medium text-white">Gêneros (separados por vírgula)</label>
+              <label for="jogo-generos" class="block text-sm font-medium text-white">Gêneros (separados por vírgula)</label>
               <input
+                id="jogo-generos"
                 v-model="generoTexto"
                 type="text"
                 class="mt-2 w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-white focus:border-primary focus:outline-none"
                 placeholder="Roguelike, Ação, Multijogador"
               >
             </div>
+            <fieldset class="sm:col-span-2">
+              <legend class="block text-sm font-medium text-white">Categorias de exibição</legend>
+              <p class="mt-1 text-xs text-zinc-500">Definem em quais seções da página inicial o jogo poderá aparecer.</p>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <label v-for="categoria in categoriasDisponiveis" :key="categoria.value" class="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-white">
+                  <input v-model="form.categorias" type="checkbox" :value="categoria.value" class="rounded border-zinc-600 bg-surface text-primary focus:ring-primary">
+                  {{ categoria.label }}
+                </label>
+              </div>
+            </fieldset>
             <div class="sm:col-span-2">
               <label class="block text-sm font-medium text-white">Plataformas (SO)</label>
               <div class="mt-2 flex flex-wrap gap-4">
@@ -126,7 +146,7 @@
               </div>
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-sm font-medium text-white">Imagem principal (thumb/hero)</label>
+              <label for="jogo-thumb-url" class="block text-sm font-medium text-white">Imagem principal (thumb/hero)</label>
               <div class="mt-2 flex flex-wrap items-start gap-4">
                 <div
                   v-if="form.thumb"
@@ -163,6 +183,7 @@
                   </button>
                   <span class="text-xs text-zinc-500">ou cole URL:</span>
                   <input
+                    id="jogo-thumb-url"
                     v-model="form.thumb"
                     type="url"
                     class="w-full rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
@@ -173,6 +194,27 @@
             </div>
             <div class="sm:col-span-2">
               <label class="block text-sm font-medium text-white">Fotos (upload ou URL)</label>
+              <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="jogo-foto-url"
+                  v-model="fotoUrl"
+                  type="url"
+                  class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-surface px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="https://exemplo.com/imagem.jpg"
+                  aria-describedby="jogo-foto-url-ajuda jogo-foto-url-erro"
+                  @keydown.enter.prevent="adicionarFotoUrl"
+                >
+                <button
+                  type="button"
+                  class="rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/10"
+                  @click="adicionarFotoUrl"
+                >
+                  Adicionar URL
+                </button>
+              </div>
+              <p v-if="fotoUrlErro" id="jogo-foto-url-erro" class="mt-1 text-sm text-red-400" role="alert">
+                {{ fotoUrlErro }}
+              </p>
               <input
                 ref="fotosInputRef"
                 type="file"
@@ -181,13 +223,15 @@
                 class="hidden"
                 @change="onFotosChange"
               >
-              <div class="mt-2 flex flex-wrap items-center gap-2">
+              <div class="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-600 text-zinc-500 transition hover:border-primary hover:text-primary"
+                  class="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-600 text-zinc-500 transition hover:border-primary hover:text-primary"
+                  aria-label="Selecionar fotos locais para prévia"
                   @click="fotosInputRef?.click()"
                 >
                   <span class="text-2xl">+</span>
+                  <span class="text-[10px]">Prévia local</span>
                 </button>
                 <div
                   v-for="(src, i) in form.fotos"
@@ -209,8 +253,8 @@
                   </button>
                 </div>
               </div>
-              <p class="mt-2 text-xs text-zinc-500">
-                Imagens são redimensionadas e salvas localmente (localStorage). Evite muitas fotos muito grandes.
+              <p id="jogo-foto-url-ajuda" class="mt-2 text-xs text-zinc-500">
+                Use URLs públicas. O upload de arquivos é apenas uma prévia e não pode ser salvo até a API oferecer upload próprio.
               </p>
             </div>
           </div>
@@ -225,9 +269,10 @@
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-primary px-6 py-2 text-sm font-bold text-dark transition hover:bg-primary/90"
+              :disabled="saving"
+              class="rounded-lg bg-primary px-6 py-2 text-sm font-bold text-dark transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {{ isEdit ? 'Salvar' : 'Criar jogo' }}
+              {{ saving ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar jogo' }}
             </button>
           </div>
         </form>
@@ -237,16 +282,17 @@
 </template>
 
 <script setup lang="ts">
-import type { JogoDev } from '~/types/jogo-dev'
-import { jogoDevVazio } from '~/types/jogo-dev'
+import type { JogoDev } from '~/types/jogo-dev.interface'
+import { jogoDevVazio } from '~/types/jogo-dev.interface'
 
 const props = withDefaults(
   defineProps<{
     modelValue: boolean
     jogo: JogoDev | null
     nomeEstudio?: string
+    saving?: boolean
   }>(),
-  { nomeEstudio: '' }
+  { nomeEstudio: '', saving: false }
 )
 
 const emit = defineEmits<{
@@ -258,10 +304,20 @@ const isEdit = computed(() => !!props.jogo)
 
 /** Texto livre para gêneros (vírgulas não são removidas enquanto digita) */
 const generoTexto = ref('')
+const categoriasDisponiveis = [
+  { value: 'destaque-hero', label: 'Destaque principal' },
+  { value: 'destaque', label: 'Destaques' },
+  { value: 'sobrevivencia', label: 'Sobrevivência' },
+  { value: 'rpg', label: 'RPG' }
+]
 const thumbInputRef = ref<HTMLInputElement | null>(null)
 const fotosInputRef = ref<HTMLInputElement | null>(null)
+const fotoUrl = ref('')
+const fotoUrlErro = ref('')
+const dialogRef = ref<HTMLElement | null>(null)
+useDialogFocus(toRef(props, 'modelValue'), dialogRef)
 
-/** Redimensiona e comprime imagem para caber no localStorage; retorna data URL */
+/** TODO(API): substituir Data URL por upload quando o backend aceitar arquivo ou armazenamento externo. */
 function readImageAsDataUrl (file: File, maxWidth = 1200, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -342,12 +398,39 @@ function removerFoto (index: number) {
   form.fotos.splice(index, 1)
 }
 
+function adicionarFotoUrl () {
+  const valor = fotoUrl.value.trim()
+  fotoUrlErro.value = ''
+
+  if (!valor) {
+    fotoUrlErro.value = 'Informe uma URL pública.'
+    return
+  }
+
+  try {
+    const url = new URL(valor)
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Protocolo inválido')
+  } catch {
+    fotoUrlErro.value = 'Informe uma URL válida iniciada por http:// ou https://.'
+    return
+  }
+
+  if (form.fotos.includes(valor)) {
+    fotoUrlErro.value = 'Esta foto já foi adicionada.'
+    return
+  }
+
+  form.fotos.push(valor)
+  fotoUrl.value = ''
+}
+
 const form = reactive({
   title: '',
   descricao: '',
   thumb: '',
   fotos: [] as string[],
   genero: [] as string[],
+  categorias: [] as string[],
   desenvolvedor: 'To The Sky',
   metaPercentual: 0,
   valorArrecadado: '',
@@ -365,12 +448,15 @@ watch(
   () => [props.jogo, props.modelValue] as const,
   ([jogo, open]) => {
     if (!open) return
+    fotoUrl.value = ''
+    fotoUrlErro.value = ''
     if (jogo) {
       form.title = jogo.title
       form.descricao = jogo.descricao
       form.thumb = jogo.thumb
       form.fotos = [...jogo.fotos]
       form.genero = [...jogo.genero]
+      form.categorias = [...(jogo.categorias ?? [])]
       form.desenvolvedor = jogo.desenvolvedor
       form.metaValor = jogo.metaValor
       form.valorArrecadado = jogo.valorArrecadado
@@ -385,6 +471,7 @@ watch(
       generoTexto.value = form.genero.join(', ')
     } else {
       Object.assign(form, jogoDevVazio())
+      form.categorias = []
       form.desenvolvedor = props.nomeEstudio.trim() || form.desenvolvedor
       form.dataPostagem = new Date().toISOString().slice(0, 7)
       generoTexto.value = ''
@@ -401,6 +488,7 @@ function onSubmit () {
     thumb: form.thumb.trim(),
     fotos: form.fotos.filter(Boolean),
     genero: form.genero,
+    categorias: form.categorias,
     desenvolvedor: form.desenvolvedor.trim(),
     metaValor: form.metaValor.trim(),
     dias: Number(form.dias) || 0,
@@ -424,6 +512,5 @@ function onSubmit () {
   } else {
     emit('save', payload)
   }
-  emit('update:modelValue', false)
 }
 </script>

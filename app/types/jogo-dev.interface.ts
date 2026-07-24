@@ -1,10 +1,12 @@
 export interface JogoDev {
   id: string
+  apiId?: number
   title: string
   descricao: string
   thumb: string
   fotos: string[]
   genero: string[]
+  categorias?: string[]
   desenvolvedor: string
   metaPercentual: number
   valorArrecadado: string

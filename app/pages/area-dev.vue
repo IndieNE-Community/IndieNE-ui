@@ -5,19 +5,15 @@
         <!-- Coluna esquerda: perfil estúdio + meus jogos -->
         <aside class="w-full shrink-0 lg:w-80">
           <div class="flex flex-col gap-6">
-            <!-- Card estúdio Supergiant Games -->
+            <!-- Card do desenvolvedor autenticado -->
             <div class="rounded-xl border border-primary/50 bg-zinc-900/50 p-6">
               <div class="flex items-start gap-4">
                 <div class="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-zinc-700">
-                  <img
-                    src="/images/supergiantgames.jpg"
-                    alt="Supergiant Games"
-                    class="h-full w-full object-cover"
-                  >
+                  <img :src="avatarEstudio" :alt="`Avatar de ${nomeEstudio}`" class="h-full w-full object-cover">
                 </div>
                 <div class="min-w-0 flex-1">
                   <h2 class="text-2xl font-bold text-white">
-                    Supergiant Games
+                    {{ nomeEstudio }}
                   </h2>
                   <p class="mt-1 text-sm text-muted">
                     Pequeno estúdio indie
@@ -28,11 +24,11 @@
                 Bio
               </p>
               <p class="mt-2 text-sm leading-relaxed text-white">
-                Somos um estúdio de jogos indie focado em experiências únicas.
+                {{ bioEstudio }}
               </p>
               <div class="mt-4 h-px w-full bg-zinc-700" />
               <p class="mt-4 text-sm text-muted">
-                Membro desde 2019
+                Conta de desenvolvedor IndieNE
               </p>
               <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-700">
                 <div class="h-full rounded-full bg-primary" :style="{ width: '60%' }" />
@@ -54,6 +50,12 @@
                 </button>
               </div>
               <ul class="mt-4 flex flex-col gap-2">
+                <li v-if="loading" class="py-5 text-center text-sm text-zinc-400" role="status">Carregando jogos...</li>
+                <li v-else-if="error" class="py-4 text-center">
+                  <p class="text-sm text-red-400">{{ error }}</p>
+                  <button type="button" class="mt-3 text-sm text-primary hover:underline" @click="refreshJogos">Tentar novamente</button>
+                </li>
+                <li v-else-if="!meusJogos.length" class="py-5 text-center text-sm text-zinc-500">Você ainda não cadastrou jogos.</li>
                 <li
                   v-for="item in meusJogos"
                   :key="item.id"
@@ -90,6 +92,9 @@
 
         <!-- Coluna direita: jogo selecionado (dashboard) + crowdfunding + posts -->
         <div class="min-w-0 flex-1">
+          <p v-if="operacaoErro" class="mb-5 rounded-lg border border-red-900/60 bg-red-950/20 p-4 text-sm text-red-400" role="alert">
+            {{ operacaoErro }}
+          </p>
           <template v-if="jogoAtual">
             <!-- Card do jogo selecionado -->
             <div class="rounded-xl border border-primary/50 bg-zinc-900/50 overflow-hidden">
@@ -120,6 +125,14 @@
                   @click="abrirModalEditar(jogoAtual)"
                 >
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+                <button
+                  type="button"
+                  class="shrink-0 rounded p-2 text-zinc-400 transition hover:bg-red-950 hover:text-red-400"
+                  aria-label="Excluir jogo"
+                  @click="confirmarExcluirJogo(jogoAtual)"
+                >
+                  <span aria-hidden="true">🗑</span>
                 </button>
               </div>
               <div class="mt-4 flex flex-wrap gap-2">
@@ -192,7 +205,8 @@
           <ModalJogoForm
             v-model="modalAberto"
             :jogo="jogoParaEditar"
-            nome-estudio="Supergiant Games"
+            :nome-estudio="nomeEstudio"
+            :saving="salvandoJogo"
             @save="onSalvarJogo"
           />
 
@@ -200,6 +214,7 @@
             v-model="modalNovoPostAberto"
             :jogo-id="jogoSelecionado"
             :jogo-title="jogoAtual?.title"
+            :saving="salvandoPost"
             @post="onNovoPost"
           />
 
@@ -255,14 +270,23 @@
               </button>
             </div>
             <div class="mt-6 flex flex-col gap-6">
+              <p v-if="postsLoading[jogoSelecionado]" class="py-8 text-center text-zinc-400" role="status">Carregando publicações...</p>
+              <div v-else-if="postsErrors[jogoSelecionado]" class="py-8 text-center">
+                <p class="text-sm text-red-400" role="alert">{{ postsErrors[jogoSelecionado] }}</p>
+                <button type="button" class="mt-3 text-sm text-primary hover:underline" @click="refreshPosts(jogoSelecionado)">Tentar novamente</button>
+              </div>
+              <p v-else-if="!posts.length" class="rounded-lg border border-dashed border-zinc-700 py-8 text-center text-zinc-500">Ainda não há publicações neste jogo.</p>
               <article
                 v-for="(post, idx) in posts"
                 :key="idx"
                 class="rounded-xl border border-primary/50 bg-zinc-900/50 p-6"
               >
-                <h3 class="text-lg font-bold text-white">
-                  {{ post.titulo }}
-                </h3>
+                <div class="flex items-start justify-between gap-4">
+                  <h3 class="text-lg font-bold text-white">{{ post.titulo }}</h3>
+                  <button v-if="post.id" type="button" class="rounded p-2 text-zinc-400 hover:bg-red-950 hover:text-red-400" :aria-label="`Excluir publicação ${post.titulo}`" @click="confirmarExcluirPost(post.id, post.titulo)">
+                    <span aria-hidden="true">🗑</span>
+                  </button>
+                </div>
                 <p class="mt-2 text-sm text-zinc-400">
                   {{ post.data }}
                 </p>
@@ -320,89 +344,64 @@
 </template>
 
 <script setup lang="ts">
-import type { JogoDev } from '~/types/jogo-dev'
-import { useMeusJogos } from '~/composables/useMeusJogos'
-import { formatarMoeda, getBaseCampanha, getDetalhesJogo, parseMetaValor } from '~/data/jogo-detalhes'
+definePageMeta({ layout: 'default', middleware: ['auth', 'developer'] })
 
-definePageMeta({ layout: 'default', middleware: 'auth' })
+import type { JogoDev } from '~/types/jogo-dev.interface'
+import { formatarMoeda, parseMetaValor } from '~/utils/moeda'
 
-const { meusJogos, addJogo, updateJogo, getJogoById } = useMeusJogos()
-const { getExtra } = useContribuicoes()
-const { getPosts: getPostsDev, addPost: addPostDev } = usePostsDev()
+interface FotoPost {
+  src: string
+  titulo: string
+}
+
+const { meusJogos, loading, error, refresh: refreshJogos, addJogo, updateJogo, removeJogo, getJogoById } = useMeusJogos()
+const { getPosts: getPostsDev, loading: postsLoading, errors: postsErrors, refresh: refreshPosts, addPost: addPostDev, removePost } = usePostsDev()
 const { getAvatarUrl } = useComentarios()
-
+const { user } = useAuth()
 const jogoSelecionado = ref('')
 const modalAberto = ref(false)
 const modalNovoPostAberto = ref(false)
 const jogoParaEditar = ref<JogoDev | null>(null)
+const salvandoJogo = ref(false)
+const salvandoPost = ref(false)
+const operacaoErro = ref('')
+const nomeEstudio = computed(() => user.value?.nome || 'Desenvolvedor independente')
+const bioEstudio = computed(() => `Projetos publicados por ${nomeEstudio.value} na comunidade IndieNE.`)
+const avatarEstudio = computed(() => getAvatarUrl(user.value?.email || nomeEstudio.value))
 
-// Selecionar primeiro jogo ao carregar
-watch(meusJogos, (list) => {
-  if (!jogoSelecionado.value && list.length > 0) {
-    const primeiro = list[0]
-    if (primeiro) jogoSelecionado.value = primeiro.id
-  }
+watch(meusJogos, (lista) => {
+  if (!jogoSelecionado.value && lista[0]) jogoSelecionado.value = lista[0].id
+}, { immediate: true })
+watch(jogoSelecionado, (id) => {
+  if (id) refreshPosts(id)
 }, { immediate: true })
 
 const jogoAtual = computed(() =>
   jogoSelecionado.value ? getJogoById(jogoSelecionado.value) : undefined
 )
-
-const baseCampanha = computed(() =>
-  jogoSelecionado.value ? getBaseCampanha(jogoSelecionado.value) : { valorNumerico: 0, apoiadores: 0, metaNumerico: 0 }
-)
-const contribuicoesJogo = computed(() =>
-  jogoSelecionado.value ? getExtra(jogoSelecionado.value) : { valorExtra: 0, apoiadoresExtra: 0 }
-)
-const totalValorDisplay = computed(() => baseCampanha.value.valorNumerico + contribuicoesJogo.value.valorExtra)
+const totalValorDisplay = computed(() => parseMetaValor(jogoAtual.value?.valorArrecadado))
 const valorArrecadadoDisplay = computed(() => formatarMoeda(totalValorDisplay.value))
-const totalApoiadoresDisplay = computed(() => baseCampanha.value.apoiadores + contribuicoesJogo.value.apoiadoresExtra)
+const totalApoiadoresDisplay = computed(() => jogoAtual.value?.apoiadores ?? 0)
 const metaNumericoDisplay = computed(() =>
-  baseCampanha.value.metaNumerico || parseMetaValor(jogoAtual.value?.metaValor)
+  parseMetaValor(jogoAtual.value?.metaValor)
 )
 const metaFormatada = computed(() =>
   metaNumericoDisplay.value > 0 ? formatarMoeda(metaNumericoDisplay.value) : (jogoAtual.value?.metaValor || '—')
 )
-const percentualMetaDisplay = computed(() => {
-  const metaNum = metaNumericoDisplay.value
-  if (metaNum <= 0) return 0
-  const total = totalValorDisplay.value
-  return Math.min(100, Math.round((total / metaNum) * 100))
-})
-
-const posts = computed(() => {
-  const base = getDetalhesJogo(jogoSelecionado.value).atualizacoes
-  const devPosts = getPostsDev(jogoSelecionado.value)
-  return [...devPosts, ...base]
-})
-
-const fotosDosPosts = computed(() => {
-  return posts.value.flatMap((p) =>
-    p.imagem ? [{ src: p.imagem, titulo: p.titulo }] : []
-  )
-})
-
-const fotoModal = ref<{ src: string; titulo: string } | null>(null)
-function abrirFotoModal (foto: { src: string; titulo: string }) {
-  fotoModal.value = foto
-}
-function fecharFotoModal () {
-  fotoModal.value = null
-}
-
-const escapeHandler = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') fecharFotoModal()
-}
-watch(fotoModal, (aberto) => {
-  if (aberto) {
-    window.addEventListener('keydown', escapeHandler)
-  } else {
-    window.removeEventListener('keydown', escapeHandler)
-  }
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', escapeHandler)
-})
+const percentualMetaDisplay = computed(() =>
+  metaNumericoDisplay.value <= 0
+    ? 0
+    : Math.min(100, Math.round((totalValorDisplay.value / metaNumericoDisplay.value) * 100))
+)
+const posts = computed(() => getPostsDev(jogoSelecionado.value))
+const fotosDosPosts = computed<FotoPost[]>(() =>
+  posts.value.flatMap(post => post.imagem ? [{ src: post.imagem, titulo: post.titulo }] : [])
+)
+const {
+  itemSelecionado: fotoModal,
+  abrir: abrirFotoModal,
+  fechar: fecharFotoModal
+} = useModal<FotoPost>()
 
 function abrirModalCriar () {
   jogoParaEditar.value = null
@@ -414,43 +413,62 @@ function abrirModalEditar (jogo: JogoDev) {
   modalAberto.value = true
 }
 
-function onSalvarJogo (payload: JogoDev | (Omit<JogoDev, 'id'>)) {
-  if ('id' in payload && payload.id) {
-    updateJogo(payload.id, payload)
-  } else {
-    const novo = addJogo(payload)
-    jogoSelecionado.value = novo.id
+async function onSalvarJogo (payload: JogoDev | Omit<JogoDev, 'id'>) {
+  salvandoJogo.value = true
+  operacaoErro.value = ''
+  try {
+    if ('id' in payload && payload.id) await updateJogo(payload.id, payload)
+    else jogoSelecionado.value = (await addJogo(payload)).id
+    modalAberto.value = false
+  } catch (cause) {
+    operacaoErro.value = cause instanceof Error ? cause.message : 'Não foi possível salvar o jogo.'
+  } finally {
+    salvandoJogo.value = false
   }
 }
 
 function formatarDataAgora () {
-  const d = new Date()
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const dia = d.getDate()
-  const mes = d.getMonth() + 1
-  const ano = d.getFullYear()
-  return `${dia}/${mes}/${ano} às ${h.toString().padStart(2, '0')}h${m.toString().padStart(2, '0')}`
+  const data = new Date()
+  return `${data.getDate()}/${data.getMonth() + 1}/${data.getFullYear()} às ${data.getHours().toString().padStart(2, '0')}h${data.getMinutes().toString().padStart(2, '0')}`
 }
 
-function onNovoPost (payload: { titulo: string; descricao: string; imagem?: string }) {
+async function onNovoPost (payload: { titulo: string, descricao: string, imagem?: string }) {
   if (!jogoSelecionado.value) return
-  addPostDev(jogoSelecionado.value, {
-    titulo: payload.titulo,
-    descricao: payload.descricao,
-    imagem: payload.imagem,
-    data: formatarDataAgora()
-  })
+  salvandoPost.value = true
+  operacaoErro.value = ''
+  try {
+    await addPostDev(jogoSelecionado.value, { ...payload, data: formatarDataAgora() })
+    modalNovoPostAberto.value = false
+  } catch (cause) {
+    operacaoErro.value = cause instanceof Error ? cause.message : 'Não foi possível publicar a atualização.'
+  } finally {
+    salvandoPost.value = false
+  }
 }
+
+async function confirmarExcluirJogo (jogo: JogoDev) {
+  if (!window.confirm(`Excluir definitivamente o jogo “${jogo.title}”? Esta ação não pode ser desfeita.`)) return
+  operacaoErro.value = ''
+  try {
+    await removeJogo(jogo.id)
+    jogoSelecionado.value = meusJogos.value[0]?.id ?? ''
+  } catch (cause) {
+    operacaoErro.value = cause instanceof Error ? cause.message : 'Não foi possível excluir o jogo.'
+  }
+}
+
+async function confirmarExcluirPost (postagemId: number, titulo: string) {
+  if (!window.confirm(`Excluir definitivamente a publicação “${titulo}”?`)) return
+  operacaoErro.value = ''
+  try {
+    await removePost(jogoSelecionado.value, postagemId)
+  } catch (cause) {
+    operacaoErro.value = cause instanceof Error ? cause.message : 'Não foi possível excluir a publicação.'
+  }
+}
+
+await refreshJogos()
 </script>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>
+
+<style scoped src="../assets/css/pages/area-dev.css"></style>

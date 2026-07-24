@@ -1,6 +1,20 @@
 <template>
   <div>
-    <!-- Hero em destaque -->
+    <section v-if="loading" class="mx-auto max-w-7xl px-6 py-20 text-center text-zinc-400" role="status">
+      Carregando jogos...
+    </section>
+    <section v-else-if="error" class="mx-auto max-w-3xl px-6 py-20 text-center">
+      <h1 class="text-xl font-bold text-white">Não foi possível carregar a página inicial</h1>
+      <p class="mt-2 text-sm text-red-400">{{ error }}</p>
+      <button type="button" class="mt-6 rounded-lg bg-primary px-5 py-2.5 font-medium text-dark" @click="refresh(true)">
+        Tentar novamente
+      </button>
+    </section>
+    <section v-else-if="!allJogos.length" class="mx-auto max-w-3xl px-6 py-20 text-center">
+      <h1 class="text-xl font-bold text-white">Nenhum jogo publicado</h1>
+      <p class="mt-2 text-zinc-400">Os jogos cadastrados aparecerão aqui.</p>
+    </section>
+    <template v-else>
     <CarouselHero :items="destaqueHero" />
 
     <!-- Destaques -->
@@ -30,7 +44,17 @@
           </h2>
 
         </div>
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <p v-if="postsLoading" class="py-8 text-center text-zinc-400" role="status">Carregando publicações...</p>
+        <div v-else-if="postsError" class="py-8 text-center">
+          <p class="text-sm text-red-400">{{ postsError }}</p>
+          <button type="button" class="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary" @click="refreshPosts">
+            Tentar novamente
+          </button>
+        </div>
+        <p v-else-if="!ultimasPostagensPagina.length" class="py-8 text-center text-zinc-500">
+          Ainda não há publicações.
+        </p>
+        <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <NuxtLink
             v-for="(post, i) in ultimasPostagensPagina"
             :key="post.id"
@@ -78,9 +102,9 @@
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
           </button>
+          <template v-for="(p, indice) in paginationPages" :key="`${p}-${indice}`">
           <button
-            v-for="p in paginationPages"
-            :key="p"
+            v-if="p !== -1"
             type="button"
             :class="[
               'flex h-9 min-w-9 items-center justify-center rounded px-2 text-sm font-medium transition',
@@ -90,73 +114,43 @@
             ]"
             @click="paginaAtual = p"
           >
-            {{ p === -1 ? '…' : p }}
+            {{ p }}
           </button>
+          <span v-else class="flex h-9 items-center px-1 text-zinc-500" aria-hidden="true">…</span>
+          </template>
           <button
             type="button"
             class="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800 hover:text-white"
             aria-label="Próxima página"
+            :disabled="paginaAtual >= totalPaginas"
+            @click="paginaAtual = Math.min(totalPaginas, paginaAtual + 1)"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { getDetalhesJogo } from '~/data/jogo-detalhes'
-import { jogos } from '~/data/jogos'
-
-definePageMeta({ layout: 'default' })
-
-const { destaqueHero, jogosDestaque, jogosSobrevivencia, jogosRpg } = useJogos()
-
-const { getPosts: getPostsDev } = usePostsDev()
-const ultimasPostagens = computed(() => {
-  const list: { id: string; titulo: string; autor: string; descricao: string; thumb?: string; jogoId: string }[] = []
-  for (const jogo of jogos) {
-    const detalhes = getDetalhesJogo(jogo.id)
-    const todasAtualizacoes = [...getPostsDev(jogo.id), ...detalhes.atualizacoes]
-    todasAtualizacoes.forEach((post, idx) => {
-      list.push({
-        id: `${jogo.id}-${idx}`,
-        titulo: post.titulo,
-        autor: jogo.title,
-        descricao: post.descricao,
-        thumb: post.imagem,
-        jogoId: jogo.id
-      })
-    })
-  }
-  return list
-})
-
 const ITENS_POR_PAGINA = 8
-const paginaAtual = ref(1)
-const totalPaginas = computed(() =>
-  Math.max(1, Math.ceil(ultimasPostagens.value.length / ITENS_POR_PAGINA))
-)
-const ultimasPostagensPagina = computed(() => {
-  const start = (paginaAtual.value - 1) * ITENS_POR_PAGINA
-  return ultimasPostagens.value.slice(start, start + ITENS_POR_PAGINA)
-})
-const paginationPages = computed(() => {
-  const total = totalPaginas.value
-  const p = paginaAtual.value
-  const pages: number[] = []
-  if (total <= 9) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (p > 3) pages.push(-1)
-    for (let i = Math.max(2, p - 1); i <= Math.min(total - 1, p + 1); i++) {
-      if (!pages.includes(i)) pages.push(i)
-    }
-    if (p < total - 2) pages.push(-1)
-    if (total > 1) pages.push(total)
-  }
-  return pages
-})
+
+const { allJogos, loading, error, refresh, destaqueHero, jogosDestaque, jogosSobrevivencia, jogosRpg } = useJogos()
+const {
+  publicacoes: ultimasPostagens,
+  loading: postsLoading,
+  error: postsError,
+  refresh: refreshPosts
+} = usePublicacoesPublicas()
+const {
+  paginaAtual,
+  totalPaginas,
+  paginationPages,
+  itensExibidos: ultimasPostagensPagina
+} = usePagination(ultimasPostagens, ITENS_POR_PAGINA, true)
+
+await refresh()
+if (!error.value) await refreshPosts()
 </script>

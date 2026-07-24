@@ -1,81 +1,66 @@
-export interface Comentario {
-  usuario: string
-  texto: string
-  avatar: string
-  likes: number
-  dislikes: number
-}
+import type { ApiComentario, Comentario } from '~/types/comentario.interface'
+import { useComentarioService } from '~/services/comentario.service'
 
-const STORAGE_KEY = 'indiene_comentarios'
-
-function getAvatarUrl (usuario: string): string {
+export function getAvatarUrl (usuario: string): string {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(usuario)}`
 }
 
-function load (): Record<string, Record<number, Comentario[]>> {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Record<string, Record<string, Comentario[]>>
-        const out: Record<string, Record<number, Comentario[]>> = {}
-        for (const jogoId of Object.keys(parsed)) {
-          out[jogoId] = {}
-          for (const idxStr of Object.keys(parsed[jogoId] || {})) {
-            const arr = (parsed[jogoId] as Record<string, Comentario[]>)[idxStr] || []
-            out[jogoId][Number(idxStr)] = arr.map(c => ({
-              ...c,
-              avatar: c.avatar || getAvatarUrl(c.usuario)
-            }))
-          }
-        }
-        return out
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return {}
-}
-
-function save (data: Record<string, Record<number, Comentario[]>>) {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+function mapComentario (comentario: ApiComentario, usuarioAtual?: { id?: string, nome?: string }): Comentario {
+  const ehUsuarioAtual = usuarioAtual?.id === comentario.usuarioId
+  const nome = ehUsuarioAtual && usuarioAtual?.nome
+    ? usuarioAtual.nome
+    : `Apoiador ${comentario.usuarioId.slice(0, 8)}`
+  return {
+    id: comentario.id,
+    usuarioId: comentario.usuarioId,
+    usuario: nome,
+    texto: comentario.texto,
+    avatar: getAvatarUrl(nome),
+    likes: comentario.likes ?? 0,
+    dislikes: comentario.dislikes ?? 0
   }
 }
 
 export function useComentarios () {
-  const data = ref<Record<string, Record<number, Comentario[]>>>(load())
+  const data = useState<Record<number, Comentario[]>>('comentarios-api', () => ({}))
+  const loading = useState<Record<number, boolean>>('comentarios-loading', () => ({}))
+  const errors = useState<Record<number, string>>('comentarios-errors', () => ({}))
+  const submitting = useState<Record<number, boolean>>('comentarios-submitting', () => ({}))
+  const comentarioService = useComentarioService()
+  const { user } = useAuth()
 
-  function persist () {
-    save(data.value)
+  function getComentarios (postagemId: number): Comentario[] {
+    return data.value[postagemId] ?? []
   }
 
-  function getComentarios (jogoId: string, atualizacaoIdx: number): Comentario[] {
-    return data.value[jogoId]?.[atualizacaoIdx] ?? []
+  async function refresh (postagemId: number) {
+    loading.value[postagemId] = true
+    delete errors.value[postagemId]
+    try {
+      const page = await comentarioService.listar(postagemId, { size: 100, sort: 'data,asc' })
+      data.value[postagemId] = page.content.map(item => mapComentario(item, user.value ?? undefined))
+    } catch (cause) {
+      errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível carregar os comentários.'
+    } finally {
+      loading.value[postagemId] = false
+    }
   }
 
-  function addComentario (jogoId: string, atualizacaoIdx: number, usuario: string, texto: string) {
-    const trimmedUser = usuario.trim() || 'Anônimo'
-    const trimmedText = texto.trim()
-    if (!trimmedText) return
-
-    if (!data.value[jogoId]) data.value[jogoId] = {}
-    if (!data.value[jogoId][atualizacaoIdx]) data.value[jogoId][atualizacaoIdx] = []
-
-    data.value[jogoId][atualizacaoIdx].push({
-      usuario: trimmedUser,
-      texto: trimmedText,
-      avatar: getAvatarUrl(trimmedUser),
-      likes: 0,
-      dislikes: 0
-    })
-    persist()
+  async function addComentario (postagemId: number, texto: string) {
+    const conteudo = texto.trim()
+    if (!conteudo) return
+    submitting.value[postagemId] = true
+    delete errors.value[postagemId]
+    try {
+      const created = await comentarioService.criar({ postagemId, texto: conteudo })
+      data.value[postagemId] = [...getComentarios(postagemId), mapComentario(created, user.value ?? undefined)]
+    } catch (cause) {
+      errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível enviar o comentário.'
+      throw cause
+    } finally {
+      submitting.value[postagemId] = false
+    }
   }
 
-  return {
-    getComentarios,
-    addComentario,
-    getAvatarUrl
-  }
+  return { getComentarios, refresh, addComentario, loading, errors, submitting, getAvatarUrl }
 }

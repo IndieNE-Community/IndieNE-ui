@@ -1,6 +1,7 @@
-export default defineNuxtRouteMiddleware(() => {
-  const auth = useCookie<{ user?: unknown } | null>('indiene_auth', { default: () => null })
-  if (!auth.value?.user) {
-    return navigateTo('/login')
+export default defineNuxtRouteMiddleware((to) => {
+  const auth = useAuthSession()
+  if (!auth.value?.token || auth.value.expiresAt <= Date.now()) {
+    auth.value = null
+    return navigateTo({ path: '/login', query: { redirecionar: to.fullPath } })
   }
 })

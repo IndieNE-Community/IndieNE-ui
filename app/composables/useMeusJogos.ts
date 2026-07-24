@@ -1,107 +1,147 @@
-import type { JogoDev } from '~/types/jogo-dev'
-import { jogoDevVazio } from '~/types/jogo-dev'
+import type { ApiJogo } from '~/types/jogo.interface'
+import type { JogoDev } from '~/types/jogo-dev.interface'
+import { jogoDevVazio } from '~/types/jogo-dev.interface'
+import { useJogoService } from '~/services/jogo.service'
+import { useImagemService } from '~/services/imagem.service'
 
-const STORAGE_KEY = 'indiene_meus_jogos'
-
-const mocks: JogoDev[] = [
-  {
-    id: 'god-breakers',
-    title: 'God Breakers',
-    descricao: 'Assuma o controle de cada luta em um combate fluido e feroz enquanto conecta combos agressivos, cancela golpes e rouba poderes.',
-    thumb: '/images/jogos/god-breakers.avif',
-    fotos: [],
-    genero: ['Roguelike', 'Ação', 'Multijogador', 'Cooperativo', 'Combate'],
-    desenvolvedor: 'Supergiant Games',
-    metaPercentual: 68,
-    valorArrecadado: 'R$ 68.745',
-    metaValor: 'R$ 100.000',
-    apoiadores: 851,
-    dias: 86,
-    dataPostagem: '2024-01',
-    dataConclusao: '2025-06',
-    qtdeJogadores: '1-4',
-    compatControle: true,
-    so: ['Windows', 'Linux']
-  },
-  {
-    id: 'ambrosia',
-    title: 'Ambrosia',
-    descricao: 'Um RPG de aventura com mundo aberto e narrativa profunda.',
-    thumb: '/images/jogos/ambrosia.jpg',
-    fotos: [],
-    genero: ['RPG', 'Aventura'],
-    desenvolvedor: 'Supergiant Games',
-    metaPercentual: 42,
-    valorArrecadado: 'R$ 12.400',
-    metaValor: 'R$ 30.000',
-    apoiadores: 120,
-    dias: 45,
-    dataPostagem: '2024-05',
-    dataConclusao: '',
-    qtdeJogadores: '1',
-    compatControle: true,
-    so: ['Windows']
-  }
-]
-
-function load (): JogoDev[] {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as JogoDev[]
-        return Array.isArray(parsed) ? parsed : mocks
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return [...mocks]
+function numeroMoeda (valor: string): number {
+  return Number(valor.replace(/[^0-9,.-]/g, '').replace('.', '').replace(',', '.')) || 0
 }
 
-function save (list: JogoDev[]) {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+function quantidadeJogadores (jogo: ApiJogo): string {
+  const minimo = jogo.numJogadoresMin ?? 1
+  const maximo = jogo.numJogadoresMax ?? minimo
+  return minimo === maximo ? String(minimo) : `${minimo}-${maximo}`
+}
+
+function mapJogo (jogo: ApiJogo, desenvolvedor: string, imagens: string[] = []): JogoDev {
+  const thumb = jogo.imgThumb || imagens[0] || ''
+  return {
+    id: String(jogo.id), apiId: jogo.id, title: jogo.titulo, descricao: jogo.descricao || '',
+    thumb, fotos: imagens.filter(imagem => imagem !== thumb), genero: jogo.generos ?? [],
+    categorias: jogo.categorias ?? [],
+    desenvolvedor: jogo.desenvolvedor || desenvolvedor,
+    metaPercentual: jogo.metaPercentual ?? 0, valorArrecadado: `R$ ${jogo.totalArrecadado ?? 0}`,
+    metaValor: `R$ ${jogo.metaFinanceira || 0}`, apoiadores: jogo.apoiadores ?? 0,
+    dias: jogo.diasRestantes ?? jogo.campanha ?? 0, dataPostagem: jogo.dataInicio?.slice(0, 7) || '',
+    dataConclusao: jogo.dataConclusao?.slice(0, 7) || '', qtdeJogadores: quantidadeJogadores(jogo),
+    compatControle: Boolean(jogo.controle), so: jogo.plataformas ?? []
+  }
+}
+
+function intervaloJogadores (valor: string): [number, number] {
+  const numeros = valor.match(/\d+/g)?.map(Number) ?? [1]
+  return [numeros[0] || 1, numeros[1] || numeros[0] || 1]
+}
+
+function toRequest (jogo: Omit<JogoDev, 'id'> | JogoDev) {
+  const [numJogadoresMin, numJogadoresMax] = intervaloJogadores(jogo.qtdeJogadores)
+  return {
+    titulo: jogo.title, descricao: jogo.descricao, metaFinanceira: numeroMoeda(jogo.metaValor) || null,
+    campanha: jogo.dias,
+    dataInicio: jogo.dataPostagem ? `${jogo.dataPostagem.slice(0, 7)}-01` : null,
+    dataConclusao: jogo.dataConclusao ? `${jogo.dataConclusao.slice(0, 7)}-01` : null,
+    numJogadoresMin, numJogadoresMax, generos: jogo.genero, categorias: jogo.categorias ?? [], plataformas: jogo.so,
+    controle: jogo.compatControle, imgThumb: jogo.thumb && !jogo.thumb.startsWith('data:') ? jogo.thumb : null
+  }
+}
+
+function validarImagens (imagens: string[]) {
+  const indiceDataUrl = imagens.findIndex(imagem => imagem.startsWith('data:'))
+  if (indiceDataUrl >= 0) {
+    throw new Error(`A imagem ${indiceDataUrl + 1} é um arquivo local. Use uma URL pública enquanto o upload não for suportado pela API.`)
   }
 }
 
 export function useMeusJogos () {
-  const meusJogos = ref<JogoDev[]>(load())
+  const meusJogos = useState<JogoDev[]>('meus-jogos-api', () => [])
+  const loading = useState('meus-jogos-loading', () => false)
+  const error = useState<string | null>('meus-jogos-error', () => null)
+  const jogoService = useJogoService()
+  const imagemService = useImagemService()
+  const { user } = useAuth()
 
-  function persist () {
-    save(meusJogos.value)
+  async function refresh () {
+    if (!user.value) return
+    loading.value = true
+    error.value = null
+    try {
+      // TODO(API): trocar pela consulta de jogos do usuário autenticado quando houver filtro por usuarioId ou /usuarios/me/jogos.
+      const page = await jogoService.listar({ size: 100, sort: 'titulo,asc' })
+      meusJogos.value = await Promise.all(page.content
+        .filter(jogo => jogo.usuarioId === user.value?.id)
+        .map(async (jogo) => {
+          const imagens = await imagemService.listar({ jogoId: jogo.id })
+          return mapJogo(jogo, user.value!.nome, imagens.map(item => item.imagem))
+        }))
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Erro ao carregar jogos.'
+    } finally {
+      loading.value = false
+    }
   }
 
-  function addJogo (payload: Omit<JogoDev, 'id'>) {
-    const id = payload.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'jogo-' + Date.now()
-    const jogo: JogoDev = { ...payload, id }
+  async function addJogo (payload: Omit<JogoDev, 'id'>) {
+    const imagensPayload = [payload.thumb, ...payload.fotos].filter((imagem): imagem is string => Boolean(imagem))
+    validarImagens(imagensPayload)
+    const created = await jogoService.criar(toRequest(payload))
+    const galeria = imagensPayload.filter(imagem => imagem !== created.imgThumb)
+    const criadas: number[] = []
+    try {
+      for (let indice = 0; indice < galeria.length; indice++) {
+        try {
+          criadas.push((await imagemService.criar({ jogoId: created.id, imagem: galeria[indice]! })).id)
+        } catch {
+          throw new Error(`O jogo não foi criado porque a imagem ${indice + 1} não pôde ser salva.`)
+        }
+      }
+    } catch (cause) {
+      await Promise.allSettled(criadas.map(id => imagemService.remover(id)))
+      await jogoService.remover(created.id).catch(() => undefined)
+      throw cause
+    }
+    const jogo = mapJogo(created, user.value?.nome || payload.desenvolvedor, galeria)
     meusJogos.value.push(jogo)
-    persist()
     return jogo
   }
 
-  function updateJogo (id: string, payload: Partial<JogoDev>) {
-    const idx = meusJogos.value.findIndex(j => j.id === id)
-    if (idx === -1) return
-    meusJogos.value[idx] = { ...meusJogos.value[idx]!, ...payload }
-    persist()
+  async function updateJogo (id: string, payload: Partial<JogoDev>) {
+    const atual = meusJogos.value.find(jogo => jogo.id === id)
+    if (!atual?.apiId) return
+    const dados = { ...atual, ...payload }
+    const imagensPayload = [dados.thumb, ...dados.fotos].filter((imagem): imagem is string => Boolean(imagem))
+    validarImagens(imagensPayload)
+    const updated = await jogoService.atualizar(atual.apiId, toRequest({ ...atual, ...payload }))
+    const imagensAtuais = await imagemService.listar({ jogoId: atual.apiId })
+    const galeria = imagensPayload.filter(imagem => imagem !== updated.imgThumb)
+    const existentes = new Map(imagensAtuais.map(imagem => [imagem.imagem, imagem]))
+    const novas = galeria.filter(imagem => !existentes.has(imagem))
+    const obsoletas = imagensAtuais.filter(imagem => !galeria.includes(imagem.imagem))
+    const criadas: number[] = []
+    try {
+      for (const [indice, imagem] of novas.entries()) {
+        try {
+          criadas.push((await imagemService.criar({ jogoId: atual.apiId, imagem })).id)
+        } catch {
+          throw new Error(`Os dados do jogo foram atualizados, mas a nova imagem ${indice + 1} falhou. As imagens anteriores foram preservadas.`)
+        }
+      }
+      await Promise.all(obsoletas.map(imagem => imagemService.remover(imagem.id)))
+    } catch (cause) {
+      await Promise.allSettled(criadas.map(imagemId => imagemService.remover(imagemId)))
+      throw cause
+    }
+    Object.assign(atual, mapJogo(updated, user.value?.nome || atual.desenvolvedor, galeria))
   }
 
-  function removeJogo (id: string) {
-    meusJogos.value = meusJogos.value.filter(j => j.id !== id)
-    persist()
+  async function removeJogo (id: string) {
+    const atual = meusJogos.value.find(jogo => jogo.id === id)
+    if (!atual?.apiId) return
+    await jogoService.remover(atual.apiId)
+    meusJogos.value = meusJogos.value.filter(jogo => jogo.id !== id)
   }
 
-  function getJogoById (id: string): JogoDev | undefined {
-    return meusJogos.value.find(j => j.id === id)
-  }
+  function getJogoById (id: string) { return meusJogos.value.find(jogo => jogo.id === id) }
 
-  return {
-    meusJogos,
-    addJogo,
-    updateJogo,
-    removeJogo,
-    getJogoById,
-    jogoDevVazio
-  }
+  return { meusJogos, loading, error, refresh, addJogo, updateJogo, removeJogo, getJogoById, jogoDevVazio }
 }

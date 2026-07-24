@@ -22,6 +22,9 @@
             <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
+            <button v-if="temFiltrosAtivos" type="button" class="ml-auto text-xs font-medium text-primary hover:underline" @click="limparFiltros">
+              Limpar
+            </button>
           </div>
           <nav class="mt-4 flex flex-col gap-0">
             <template v-for="(filtro, index) in filtrosConfig" :key="filtro.id">
@@ -30,12 +33,14 @@
                 <button
                   type="button"
                   class="flex w-full items-center justify-between text-left text-base text-white transition hover:opacity-90"
+                  :aria-expanded="filtroAberto === filtro.id"
+                  :aria-controls="`filtro-${filtro.id}`"
                   @click="toggleFiltro(filtro.id)"
                 >
                   <span>{{ filtro.label }}</span>
                   <span class="text-lg leading-none transition" :class="filtroAberto === filtro.id ? 'rotate-45' : ''">+</span>
                 </button>
-                <div v-show="filtroAberto === filtro.id" class="mt-3 space-y-2 pl-1">
+                <div :id="`filtro-${filtro.id}`" v-show="filtroAberto === filtro.id" class="mt-3 space-y-2 pl-1">
                   <template v-if="filtro.id === 'genero'">
                     <label v-for="g in opcoesFiltros.generos" :key="g" class="flex cursor-pointer items-center gap-2 text-sm text-white">
                       <input v-model="filtros.generos" type="checkbox" :value="g" class="rounded border-zinc-600 bg-surface text-primary focus:ring-primary">
@@ -105,6 +110,16 @@
         </aside>
 
         <div class="min-w-0 flex-1">
+          <div v-if="loading" class="rounded-xl border border-zinc-700 px-6 py-16 text-center text-zinc-400" role="status">
+            Carregando jogos...
+          </div>
+          <div v-else-if="error" class="rounded-xl border border-red-900/60 px-6 py-12 text-center">
+            <p class="text-red-400">{{ error }}</p>
+            <button type="button" class="mt-5 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-dark" @click="refresh(true)">
+              Tentar novamente
+            </button>
+          </div>
+          <template v-else>
           <p class="mb-4 text-sm text-muted">
             {{ jogosFiltrados.length }} jogo(s) encontrado(s)
           </p>
@@ -113,7 +128,7 @@
               v-for="(jogo, i) in jogosExibidos"
               :key="jogo.id"
               :to="`/jogo/${jogo.id}`"
-              class="group block overflow-hidden rounded-xl transition hover:opacity-95"
+              class="group block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/70 transition hover:border-primary/50"
             >
               <div class="aspect-video w-full overflow-hidden bg-zinc-800">
                 <img
@@ -127,6 +142,17 @@
                   class="flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500"
                 >
                   <span class="text-sm">{{ jogo.title }}</span>
+                </div>
+              </div>
+              <div class="p-4">
+                <h2 class="font-semibold text-white group-hover:text-primary">{{ jogo.title }}</h2>
+                <p class="mt-1 text-sm text-zinc-400">{{ jogo.desenvolvedor }}</p>
+                <div class="mt-3 flex flex-wrap gap-1">
+                  <span v-for="genero in jogo.genero.slice(0, 3)" :key="genero" class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">{{ genero }}</span>
+                </div>
+                <div class="mt-4 flex items-center justify-between text-xs text-zinc-400">
+                  <span>{{ jogo.metaPercentual }}% da meta</span>
+                  <span>{{ jogo.qtdeJogadores }} jogador(es)</span>
                 </div>
               </div>
             </NuxtLink>
@@ -144,7 +170,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <template v-for="p in paginationPages" :key="p">
+            <template v-for="(p, pIdx) in paginationPages" :key="`${p}-${pIdx}`">
               <button
                 v-if="p !== -1"
                 type="button"
@@ -172,6 +198,10 @@
               </svg>
             </button>
           </div>
+          <p v-if="!jogosFiltrados.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center text-zinc-500">
+            Nenhum jogo corresponde aos filtros selecionados.
+          </p>
+          </template>
         </div>
       </div>
     </div>
@@ -179,15 +209,12 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
+const ITENS_POR_PAGINA = 12
 
 const route = useRoute()
 const router = useRouter()
-const itensPorPagina = 12
-
 const busca = ref('')
 const filtroAberto = ref<string | null>('genero')
-
 const filtros = reactive({
   generos: [] as string[],
   desenvolvedor: null as string | null,
@@ -198,33 +225,34 @@ const filtros = reactive({
   so: [] as string[]
 })
 
-/** Lê os query params e aplica nos filtros (ex.: /explorar?genero=Survival&genero=RPG) */
+function valoresString (valor: unknown): string[] {
+  const valores = Array.isArray(valor) ? valor : valor ? [valor] : []
+  return valores.filter((item): item is string => typeof item === 'string')
+}
+
 function syncQueryToFiltros () {
-  const q = route.query
-  const genero = q.genero
-  filtros.generos = (Array.isArray(genero) ? genero : genero ? [genero] : []).filter((v): v is string => typeof v === 'string')
-  if (q.busca !== undefined) busca.value = (q.busca as string) ?? ''
-  filtros.desenvolvedor = (q.desenvolvedor as string) || null
-  filtros.metaMin = q.metaMin != null ? Number(q.metaMin) : null
-  filtros.dataPostagem = (q.dataPostagem as string) || null
-  filtros.qtdeJogadores = (q.qtdeJogadores as string) || null
-  filtros.compatControle = q.controle === 'sim' ? true : null
-  const so = q.so
-  filtros.so = (Array.isArray(so) ? so : so ? [so] : []).filter((v): v is string => typeof v === 'string')
+  const query = route.query
+  filtros.generos = valoresString(query.genero)
+  if (query.busca !== undefined) busca.value = (query.busca as string) ?? ''
+  filtros.desenvolvedor = (query.desenvolvedor as string) || null
+  filtros.metaMin = query.metaMin !== undefined ? Number(query.metaMin) : null
+  filtros.dataPostagem = (query.dataPostagem as string) || null
+  filtros.qtdeJogadores = (query.qtdeJogadores as string) || null
+  filtros.compatControle = query.controle === 'sim' ? true : null
+  filtros.so = valoresString(query.so)
   if (filtros.generos.length) filtroAberto.value = 'genero'
 }
 
-/** Atualiza a URL com os filtros atuais (mantém link compartilhável) */
 function syncFiltrosToQuery () {
   const query: Record<string, string | string[] | number | undefined> = {}
-  if (filtros.generos.length) query.genero = filtros.generos.length === 1 ? filtros.generos[0]! : [...filtros.generos]
+  if (filtros.generos.length) query.genero = filtros.generos.length === 1 ? filtros.generos[0] : [...filtros.generos]
   if (busca.value.trim()) query.busca = busca.value.trim()
   if (filtros.desenvolvedor) query.desenvolvedor = filtros.desenvolvedor
-  if (filtros.metaMin != null) query.metaMin = filtros.metaMin
+  if (filtros.metaMin !== null) query.metaMin = filtros.metaMin
   if (filtros.dataPostagem) query.dataPostagem = filtros.dataPostagem
   if (filtros.qtdeJogadores) query.qtdeJogadores = filtros.qtdeJogadores
-  if (filtros.compatControle === true) query.controle = 'sim'
-  if (filtros.so.length) query.so = filtros.so.length === 1 ? filtros.so[0]! : [...filtros.so]
+  if (filtros.compatControle) query.controle = 'sim'
+  if (filtros.so.length) query.so = filtros.so.length === 1 ? filtros.so[0] : [...filtros.so]
   router.replace({ path: route.path, query })
 }
 
@@ -246,7 +274,24 @@ function toggleFiltro (id: string) {
   filtroAberto.value = filtroAberto.value === id ? null : id
 }
 
-const { jogosFiltrados, opcoesFiltros } = useJogosFiltrados({
+const temFiltrosAtivos = computed(() => Boolean(
+  busca.value.trim() || filtros.generos.length || filtros.desenvolvedor
+  || filtros.metaMin !== null || filtros.dataPostagem || filtros.qtdeJogadores
+  || filtros.compatControle || filtros.so.length
+))
+
+function limparFiltros () {
+  busca.value = ''
+  filtros.generos = []
+  filtros.desenvolvedor = null
+  filtros.metaMin = null
+  filtros.dataPostagem = null
+  filtros.qtdeJogadores = null
+  filtros.compatControle = null
+  filtros.so = []
+}
+
+const { jogosFiltrados, opcoesFiltros, loading, error, refresh } = useJogosFiltrados({
   busca,
   generos: toRef(filtros, 'generos'),
   desenvolvedor: toRef(filtros, 'desenvolvedor'),
@@ -256,32 +301,12 @@ const { jogosFiltrados, opcoesFiltros } = useJogosFiltrados({
   compatControle: toRef(filtros, 'compatControle'),
   so: toRef(filtros, 'so')
 })
+const {
+  paginaAtual,
+  totalPaginas,
+  paginationPages,
+  itensExibidos: jogosExibidos
+} = usePagination(jogosFiltrados, ITENS_POR_PAGINA)
 
-const paginaAtual = ref(1)
-const totalPaginas = computed(() => Math.ceil(jogosFiltrados.value.length / itensPorPagina) || 0)
-
-watch(jogosFiltrados, () => { paginaAtual.value = 1 }, { deep: true })
-
-const paginationPages = computed(() => {
-  const p = paginaAtual.value
-  const total = totalPaginas.value
-  const pages: number[] = []
-  if (total <= 9) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (p > 3) pages.push(-1)
-    for (let i = Math.max(2, p - 1); i <= Math.min(total - 1, p + 1); i++) {
-      if (!pages.includes(i)) pages.push(i)
-    }
-    if (p < total - 2) pages.push(-1)
-    if (total > 1) pages.push(total)
-  }
-  return pages
-})
-
-const jogosExibidos = computed(() => {
-  const start = (paginaAtual.value - 1) * itensPorPagina
-  return jogosFiltrados.value.slice(start, start + itensPorPagina)
-})
+await refresh()
 </script>

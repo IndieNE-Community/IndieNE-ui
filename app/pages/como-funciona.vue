@@ -58,8 +58,6 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
-
 const passos = [
   'O desenvolvedor cria uma campanha',
   'O jogador escolhe um projeto para apoiar',
@@ -67,4 +65,5 @@ const passos = [
   'A doação é registrada automaticamente',
   'Transparência e atualização contínua'
 ]
+
 </script>

@@ -1,76 +1,56 @@
-const STORAGE_KEY = 'indiene_comentario_reacoes'
+import type { ApiCurtida } from '~/types/curtida.interface'
+import { useCurtidaService } from '~/services/curtida.service'
 
 type Reacao = 'like' | 'dislike'
 
-// key: "jogoId:atualizacaoIdx:commentIndex" -> Record<userEmail, Reacao>
-function load (): Record<string, Record<string, Reacao>> {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? JSON.parse(raw) : {}
-    } catch {
-      // ignore
-    }
-  }
-  return {}
-}
-
-function save (data: Record<string, Record<string, Reacao>>) {
-  if (import.meta.client && typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }
-}
-
-function key (jogoId: string, atualizacaoIdx: number, commentIndex: number) {
-  return `${jogoId}:${atualizacaoIdx}:${commentIndex}`
-}
-
 export function useComentarioReacoes () {
-  const data = ref<Record<string, Record<string, Reacao>>>(load())
+  const reacoes = useState<Record<number, ApiCurtida[]>>('comentario-reacoes-api', () => ({}))
+  const loading = useState<Record<number, boolean>>('comentario-reacoes-loading', () => ({}))
+  const errors = useState<Record<number, string>>('comentario-reacoes-errors', () => ({}))
+  const curtidaService = useCurtidaService()
+  const { user } = useAuth()
 
-  function persist () {
-    save(data.value)
+  function getMinhaReacao (comentarioId: number): Reacao | null {
+    const atual = reacoes.value[comentarioId]?.find(item => item.usuarioId === user.value?.id)
+    return atual?.tipo === 'dislike' ? 'dislike' : atual ? 'like' : null
   }
 
-  function getTotais (jogoId: string, atualizacaoIdx: number, commentIndex: number): { likes: number; dislikes: number } {
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    const reacoes = data.value[k]
-    if (!reacoes) return { likes: 0, dislikes: 0 }
-    let likes = 0
-    let dislikes = 0
-    for (const r of Object.values(reacoes)) {
-      if (r === 'like') likes++
-      else dislikes++
+  async function refresh (comentarioId: number) {
+    loading.value[comentarioId] = true
+    delete errors.value[comentarioId]
+    try {
+      const page = await curtidaService.listar({ comentarioId, size: 100 })
+      reacoes.value[comentarioId] = page.content
+    } catch (cause) {
+      errors.value[comentarioId] = cause instanceof Error ? cause.message : 'Não foi possível carregar as reações.'
+    } finally {
+      loading.value[comentarioId] = false
     }
-    return { likes, dislikes }
   }
 
-  function getMinhaReacao (jogoId: string, atualizacaoIdx: number, commentIndex: number): Reacao | null {
-    const { user } = useAuth()
-    const email = user.value?.email
-    if (!email) return null
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    return data.value[k]?.[email] ?? null
-  }
-
-  function setReacao (jogoId: string, atualizacaoIdx: number, commentIndex: number, tipo: Reacao) {
-    const { user } = useAuth()
-    const email = user.value?.email
-    if (!email) return
-    const k = key(jogoId, atualizacaoIdx, commentIndex)
-    if (!data.value[k]) data.value[k] = {}
-    const current = data.value[k][email]
-    if (current === tipo) {
-      delete data.value[k][email]
-    } else {
-      data.value[k][email] = tipo
+  async function setReacao (comentarioId: number, tipo: Reacao) {
+    if (!user.value) return
+    loading.value[comentarioId] = true
+    delete errors.value[comentarioId]
+    try {
+      const atual = reacoes.value[comentarioId]?.find(item => item.usuarioId === user.value?.id)
+      if (atual) await curtidaService.remover(atual.id)
+      if (!atual || atual.tipo !== tipo) {
+        const created = await curtidaService.criar({ comentarioId, tipo })
+        reacoes.value[comentarioId] = [
+          ...(reacoes.value[comentarioId] ?? []).filter(item => item.id !== atual?.id),
+          created
+        ]
+      } else {
+        reacoes.value[comentarioId] = (reacoes.value[comentarioId] ?? []).filter(item => item.id !== atual.id)
+      }
+    } catch (cause) {
+      errors.value[comentarioId] = cause instanceof Error ? cause.message : 'Não foi possível registrar a reação.'
+      throw cause
+    } finally {
+      loading.value[comentarioId] = false
     }
-    persist()
   }
 
-  return {
-    getTotais,
-    getMinhaReacao,
-    setReacao
-  }
+  return { getMinhaReacao, refresh, setReacao, loading, errors }
 }

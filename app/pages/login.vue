@@ -6,7 +6,7 @@
           Entrar
         </h1>
         <p class="mt-2 text-sm text-muted">
-          Use seu e-mail e senha para acessar a Área DEV.
+          Use seu e-mail e senha para acessar sua conta.
         </p>
 
         <form class="mt-8 space-y-6" @submit.prevent="onSubmit">
@@ -38,6 +38,9 @@
           <p v-if="erro" class="text-sm text-red-400">
             {{ erro }}
           </p>
+          <p v-if="avisoSessao" class="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-sm text-amber-200" role="status">
+            {{ avisoSessao }}
+          </p>
 
           <button
             type="submit"
@@ -60,31 +63,34 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
-
-const router = useRouter()
-const { login, isLoggedIn } = useAuth()
-
+const { login, isLoggedIn, isDeveloper } = useAuth()
 const email = ref('')
 const senha = ref('')
 const erro = ref('')
 const loading = ref(false)
+const route = useRoute()
+const avisoSessao = computed(() => route.query.motivo === 'sessao-expirada' ? 'Sua sessão expirou. Entre novamente para continuar.' : '')
 
-// Se já estiver logado, redireciona
-watch(isLoggedIn, (v) => { if (v) router.push('/area-dev') }, { immediate: true })
+if (isLoggedIn.value) await navigateTo(isDeveloper.value ? '/area-dev' : '/perfil')
 
 async function onSubmit () {
   erro.value = ''
   loading.value = true
   try {
-    const result = login(email.value, senha.value)
-    if (result.ok) {
-      await router.push('/area-dev')
-    } else {
-      erro.value = result.erro ?? 'Erro ao entrar.'
+    const resultado = await login(email.value, senha.value)
+    if (resultado.ok) {
+      const destinoSolicitado = typeof route.query.redirecionar === 'string' && route.query.redirecionar.startsWith('/')
+        ? route.query.redirecionar
+        : null
+      const destino = destinoSolicitado === '/area-dev' && !isDeveloper.value
+        ? '/perfil'
+        : destinoSolicitado ?? (isDeveloper.value ? '/area-dev' : '/perfil')
+      await navigateTo(destino)
     }
+    else erro.value = resultado.erro ?? 'Erro ao entrar.'
   } finally {
     loading.value = false
   }
 }
+
 </script>
