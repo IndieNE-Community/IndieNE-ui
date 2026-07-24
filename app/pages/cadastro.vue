@@ -6,10 +6,27 @@
           Criar perfil
         </h1>
         <p class="mt-2 text-sm text-muted">
-          Cadastre-se para publicar jogos e acessar a Área DEV.
+          Escolha como você deseja participar da comunidade IndieNE.
         </p>
 
         <form class="mt-8 space-y-6" @submit.prevent="onSubmit">
+          <div>
+            <fieldset>
+              <legend class="block text-sm font-medium text-white">Tipo de perfil</legend>
+              <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                <label
+                  v-for="opcao in tiposPerfil"
+                  :key="opcao.value"
+                  class="cursor-pointer rounded-lg border p-4 transition focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-dark"
+                  :class="tipo === opcao.value ? 'border-primary bg-primary/10' : 'border-zinc-700 bg-surface hover:border-zinc-500'"
+                >
+                  <input v-model="tipo" type="radio" name="tipo-perfil" :value="opcao.value" class="sr-only">
+                  <span class="block text-sm font-medium text-white">{{ opcao.label }}</span>
+                  <span class="mt-1 block text-xs text-zinc-400">{{ opcao.descricao }}</span>
+                </label>
+              </div>
+            </fieldset>
+          </div>
           <div>
             <label for="cadastro-nome" class="block text-sm font-medium text-white">Nome</label>
             <input
@@ -88,15 +105,25 @@
 </template>
 
 <script setup lang="ts">
+import type { ApiUser } from '~/types/user.interface'
+
 const { register, isLoggedIn } = useAuth()
 const nome = ref('')
 const email = ref('')
 const senha = ref('')
 const confirmarSenha = ref('')
+const tipo = ref<ApiUser['tipo']>('USUARIO_COMUM')
 const erro = ref('')
 const loading = ref(false)
+const tiposPerfil: Array<{ value: ApiUser['tipo'], label: string, descricao: string }> = [
+  { value: 'USUARIO_COMUM', label: 'Usuário comum', descricao: 'Descubra, acompanhe e apoie jogos.' },
+  { value: 'DESENVOLVEDOR', label: 'Desenvolvedor', descricao: 'Publique jogos e acesse a Área DEV.' }
+]
 
-if (isLoggedIn.value) await navigateTo('/area-dev')
+if (isLoggedIn.value) {
+  const { isDeveloper } = useAuth()
+  await navigateTo(isDeveloper.value ? '/area-dev' : '/perfil')
+}
 
 async function onSubmit () {
   if (senha.value !== confirmarSenha.value) {
@@ -107,8 +134,8 @@ async function onSubmit () {
   erro.value = ''
   loading.value = true
   try {
-    const resultado = await register(nome.value, email.value, senha.value)
-    if (resultado.ok) await navigateTo('/area-dev')
+    const resultado = await register(nome.value, email.value, senha.value, tipo.value)
+    if (resultado.ok) await navigateTo(tipo.value === 'DESENVOLVEDOR' ? '/area-dev' : '/perfil')
     else erro.value = resultado.erro ?? 'Erro ao cadastrar.'
   } finally {
     loading.value = false

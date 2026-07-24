@@ -6,6 +6,7 @@ export interface JogoDev {
   thumb: string
   fotos: string[]
   genero: string[]
+  categorias?: string[]
   desenvolvedor: string
   metaPercentual: number
   valorArrecadado: string
