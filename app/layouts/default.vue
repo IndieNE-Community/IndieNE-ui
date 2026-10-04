@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-dark text-zinc-100">
     <header class="sticky top-0 z-50 border-b border-zinc-800 bg-dark/95 backdrop-blur-sm">
-      <div class="mx-auto flex h-20 max-w-screen-2xl items-center justify-between px-4 sm:px-8 lg:px-12">
+      <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <NuxtLink to="/" class="text-xl font-bold tracking-tight">
           <span class="text-white">indie</span><span class="text-primary">NE</span>
         </NuxtLink>

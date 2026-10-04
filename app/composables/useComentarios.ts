@@ -1,11 +1,8 @@
 import type { ApiComentario, Comentario } from '~/types/comentario.interface'
 import { useComentarioService } from '~/services/comentario.service'
+import { buildAvatarUrl } from '~/utils/avatar'
 
-export function getAvatarUrl (usuario: string): string {
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(usuario)}`
-}
-
-function mapComentario (comentario: ApiComentario, usuarioAtual?: { id?: string, nome?: string }): Comentario {
+function mapComentario (comentario: ApiComentario, avatarBase: string, usuarioAtual?: { id?: string, nome?: string }): Comentario {
   const ehUsuarioAtual = usuarioAtual?.id === comentario.usuarioId
   const nome = ehUsuarioAtual && usuarioAtual?.nome
     ? usuarioAtual.nome
@@ -15,13 +12,15 @@ function mapComentario (comentario: ApiComentario, usuarioAtual?: { id?: string,
     usuarioId: comentario.usuarioId,
     usuario: nome,
     texto: comentario.texto,
-    avatar: getAvatarUrl(nome),
+    avatar: buildAvatarUrl(avatarBase, nome),
     likes: comentario.likes ?? 0,
     dislikes: comentario.dislikes ?? 0
   }
 }
 
 export function useComentarios () {
+  const { public: { avatarBase } } = useRuntimeConfig()
+  const getAvatarUrl = (usuario: string) => buildAvatarUrl(avatarBase, usuario)
   const data = useState<Record<number, Comentario[]>>('comentarios-api', () => ({}))
   const loading = useState<Record<number, boolean>>('comentarios-loading', () => ({}))
   const errors = useState<Record<number, string>>('comentarios-errors', () => ({}))
@@ -38,7 +37,7 @@ export function useComentarios () {
     delete errors.value[postagemId]
     try {
       const page = await comentarioService.listar(postagemId, { size: 100, sort: 'data,asc' })
-      data.value[postagemId] = page.content.map(item => mapComentario(item, user.value ?? undefined))
+      data.value[postagemId] = page.content.map(item => mapComentario(item, avatarBase, user.value ?? undefined))
     } catch (cause) {
       errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível carregar os comentários.'
     } finally {
@@ -53,7 +52,7 @@ export function useComentarios () {
     delete errors.value[postagemId]
     try {
       const created = await comentarioService.criar({ postagemId, texto: conteudo })
-      data.value[postagemId] = [...getComentarios(postagemId), mapComentario(created, user.value ?? undefined)]
+      data.value[postagemId] = [...getComentarios(postagemId), mapComentario(created, avatarBase, user.value ?? undefined)]
     } catch (cause) {
       errors.value[postagemId] = cause instanceof Error ? cause.message : 'Não foi possível enviar o comentário.'
       throw cause

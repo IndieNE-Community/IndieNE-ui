@@ -1,3 +1,5 @@
+import { backendRequestUrl } from '../../utils/backend-url'
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const path = event.path.replace(/^\/api\/backend/, '')
@@ -6,5 +8,5 @@ export default defineEventHandler(async (event) => {
   // Origin ao Spring como se o navegador estivesse acessando a API diretamente.
   delete event.node.req.headers.origin
 
-  return proxyRequest(event, `${config.backendBase}${path}`)
+  return proxyRequest(event, backendRequestUrl(config.backendBase, path))
 })
