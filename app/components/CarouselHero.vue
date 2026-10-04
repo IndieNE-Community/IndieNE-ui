@@ -43,7 +43,7 @@
                 <span
                   v-for="tag in (item.tags || [])"
                   :key="tag"
-                  class="rounded-full bg-primary/20 px-3 py-1 text-sm font-medium text-zinc-900"
+                  class="rounded-full bg-primary/20 px-3 py-1 text-sm font-medium text-primary"
                 >
                   {{ tag }}
                 </span>
@@ -51,6 +51,7 @@
               <p v-if="item.developer" class="mt-4 text-sm text-zinc-500">
                 Desenvolvedor:&nbsp;{{ item.developer }}
               </p>
+              <MetaArrecadacao :percentual="item.metaPercentual" class="mt-4" />
             </div>
             <div class="mt-10">
               <NuxtLink
@@ -90,6 +91,7 @@ const props = defineProps<{
     image?: string
     tags?: string[]
     developer?: string
+    metaPercentual: number
   }>
 }>()
 

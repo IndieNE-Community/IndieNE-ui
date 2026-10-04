@@ -49,6 +49,39 @@ for (const width of [390, 639, 640, 767, 768, 1023, 1024, 1280, 1440, 1920]) {
       expect(Math.abs(actual.right - reference.right), `${name}: margem direita`).toBeLessThanOrEqual(1)
     }
 
+    for (const title of ['Destaques', 'Sobrevivência', 'RPG']) {
+      const section = page.locator('main section').filter({
+        has: page.getByRole('heading', { name: title, exact: true })
+      })
+      const cards = section.locator('a[href^="/jogo/"]')
+      await expect(cards).toHaveCount(title === 'Sobrevivência' ? 5 : 7)
+      const first = await cards.first().boundingBox()
+      expect(first).not.toBeNull()
+      expect(Math.abs(first!.x - reference.left), `${title}: primeiro cartão alinhado`).toBeLessThanOrEqual(1)
+
+      const track = cards.first().locator('..')
+      const overflow = await track.evaluate(el => el.scrollWidth - el.clientWidth)
+      const previous = section.getByRole('button', { name: 'Anterior', exact: true, includeHidden: true })
+      const next = section.getByRole('button', { name: 'Próximo', exact: true, includeHidden: true })
+      await expect(previous).toBeHidden()
+      if (overflow > 1) {
+        await expect(next).toBeVisible()
+        await next.click()
+        await expect.poll(() => track.evaluate(el => el.scrollLeft)).toBeGreaterThan(0)
+        await expect(previous).toBeVisible()
+      } else {
+        await expect(next).toBeHidden()
+      }
+
+      // Mede o cartão final, não apenas o contêiner: detecta sobra no caso de cinco itens.
+      await track.evaluate(el => el.scrollTo({ left: el.scrollWidth, behavior: 'instant' }))
+      await expect.poll(async () => {
+        const last = await cards.last().boundingBox()
+        return last ? Math.abs(last.x + last.width - reference.right) : Infinity
+      }, { message: `${title}: último cartão alinhado ao final da rolagem` }).toBeLessThanOrEqual(1)
+      await expect(next).toBeHidden()
+    }
+
     expect(await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth
     ), 'A página não deve ter rolagem horizontal').toBeLessThanOrEqual(1)

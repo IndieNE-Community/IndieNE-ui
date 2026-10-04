@@ -102,6 +102,15 @@ npm test
 O teste abre a home real em dez larguras de 390 a 1920px e compara as margens
 internas do cabeçalho, dos carrosséis e das postagens, com tolerância de 1px.
 Ele também exige CSS carregado e ausência de rolagem horizontal da página.
+Nos carrosséis de cinco e sete jogos, confere a borda do primeiro cartão,
+o avanço pela seta quando há rolagem e a borda do último cartão no fim da lista.
+As setas aparecem somente nas direções em que há conteúdo para rolar; o teste
+também verifica que ficam ocultas quando todos os cartões cabem na tela.
+
+A seção Destaques mostra primeiro os jogos marcados como `destaque` e depois
+os demais jogos carregados do catálogo, sem duplicação. A ordem recebida é
+preservada dentro de cada grupo. `tests/e2e/home-highlights.spec.ts` verifica
+essa seleção no HTML da home, sem navegador.
 
 O Playwright inicia e encerra o Nuxt e uma API com dados sintéticos locais; não
 usa a API publicada nem credenciais. As portas locais 4317 e 4318 precisam
@@ -116,3 +125,15 @@ npm test -- tests/e2e/environment-urls.spec.ts
 Esses testes verificam o proxy e os avatares no HTML gerado pelo Nuxt, além de
 configuração ausente ou inválida, prefixos da API e parâmetros dos avatares.
 O ambiente de teste usa serviços sintéticos locais definidos pelo Playwright.
+
+Para verificar as mensagens de erro e a configuração das URLs, sem navegador:
+
+```bash
+npm test -- tests/e2e/api-errors.spec.ts tests/e2e/environment-urls.spec.ts
+```
+
+Os testes de erro verificam o HTML da página de jogo com respostas 500, 502,
+503, 504 e conexão interrompida. Também cobrem autenticação, validação de campos
+e conflitos conhecidos. O cliente central da API traduz essas falhas para português;
+textos técnicos recebidos do servidor não são exibidos ao usuário. Novas mensagens
+de negócio devem ser mapeadas explicitamente em `app/utils/api-error-message.ts`.

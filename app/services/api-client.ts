@@ -1,18 +1,10 @@
 import type { NitroFetchOptions, NitroFetchRequest } from 'nitropack'
+import { apiErrorMessage } from '../utils/api-error-message'
 
 const API_BASE_URL = '/api/backend'
 const API_TIMEOUT_MS = 10_000
 
 type ApiRequestOptions = NitroFetchOptions<NitroFetchRequest>
-
-interface ApiErrorPayload {
-  detail?: string
-  message?: string
-  error?: string
-  title?: string
-  errors?: unknown
-  fieldErrors?: unknown
-}
 
 interface FetchErrorLike {
   data?: unknown
@@ -27,70 +19,6 @@ export interface HttpServiceClient {
 
 function asFetchError (error: unknown): FetchErrorLike {
   return typeof error === 'object' && error !== null ? error as FetchErrorLike : {}
-}
-
-function isRecord (value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function textoNaoVazio (value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function mensagensDeValidacao (value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      if (typeof item === 'string') return [item]
-      if (!isRecord(item)) return []
-      const campo = textoNaoVazio(item.field) ?? textoNaoVazio(item.campo)
-      const mensagem = textoNaoVazio(item.defaultMessage) ?? textoNaoVazio(item.message) ?? textoNaoVazio(item.mensagem)
-      return mensagem ? [`${campo ? `${campo}: ` : ''}${mensagem}`] : []
-    })
-  }
-
-  if (isRecord(value)) {
-    return Object.entries(value).flatMap(([campo, mensagem]) => {
-      const texto = textoNaoVazio(mensagem)
-      return texto ? [`${campo}: ${texto}`] : []
-    })
-  }
-
-  return []
-}
-
-function mensagemPorStatus (status?: number): string {
-  switch (status) {
-    case 400: return 'Os dados enviados são inválidos.'
-    case 401: return 'E-mail ou senha inválidos.'
-    case 403: return 'Você não tem permissão para realizar esta operação.'
-    case 404: return 'O recurso solicitado não foi encontrado.'
-    case 409: return 'Já existe um registro com esses dados.'
-    case 422: return 'Não foi possível validar os dados enviados.'
-    case 429: return 'Muitas tentativas. Aguarde um momento e tente novamente.'
-    default:
-      return status && status >= 500
-        ? 'O backend encontrou um erro ao processar a solicitação.'
-        : 'Não foi possível comunicar com o backend.'
-  }
-}
-
-function extrairMensagemErro (data: unknown, status?: number): string {
-  const textoDireto = textoNaoVazio(data)
-  if (textoDireto) return textoDireto
-  if (!isRecord(data)) return mensagemPorStatus(status)
-
-  const payload = data as ApiErrorPayload
-  const validacoes = [
-    ...mensagensDeValidacao(payload.errors),
-    ...mensagensDeValidacao(payload.fieldErrors)
-  ]
-  if (validacoes.length) return validacoes.join(' ')
-
-  return textoNaoVazio(payload.detail)
-    ?? textoNaoVazio(payload.message)
-    ?? textoNaoVazio(payload.error)
-    ?? textoNaoVazio(payload.title)
-    ?? mensagemPorStatus(status)
 }
 
 export class ApiServiceError extends Error {
@@ -123,7 +51,8 @@ export function useApiClient (): HttpServiceClient {
         if (import.meta.client) await navigateTo({ path: '/login', query: { motivo: 'sessao-expirada' } })
       }
 
-      const message = extrairMensagemErro(fetchError.data, status)
+      const authContext = tinhaSessao ? 'session' : path === '/auth/login' ? 'login' : 'anonymous'
+      const message = apiErrorMessage(fetchError.data, status, authContext)
 
       throw new ApiServiceError(message, status)
     }

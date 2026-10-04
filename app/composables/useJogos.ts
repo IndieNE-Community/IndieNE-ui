@@ -70,14 +70,18 @@ export function useJogos () {
     subtitle: jogo.genero[0] ?? 'Indie',
     image: jogo.thumb,
     tags: jogo.genero,
-    developer: jogo.desenvolvedor
+    developer: jogo.desenvolvedor,
+    metaPercentual: jogo.metaPercentual
   })))
 
   const destaqueHero = toCarousel(computed(() => {
     const destaques = allJogos.value.filter(jogo => jogo.categorias.includes('destaque-hero'))
     return (destaques.length ? destaques : allJogos.value).slice(0, 3)
   }))
-  const jogosDestaque = toCarousel(porCategoria('destaque'))
+  const jogosDestaque = toCarousel(computed(() => [
+    ...allJogos.value.filter(jogo => jogo.categorias.includes('destaque')),
+    ...allJogos.value.filter(jogo => !jogo.categorias.includes('destaque'))
+  ]))
   const jogosSobrevivencia = toCarousel(porCategoria('sobrevivencia', 'survival'))
   const jogosRpg = toCarousel(porCategoria('rpg', 'rpg'))
 

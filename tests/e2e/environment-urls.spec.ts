@@ -14,7 +14,7 @@ test('proxy usa o backend configurado no ambiente', async ({ request }) => {
   const response = await request.get('/api/backend/jogos')
   expect(response.status()).toBe(200)
   const data = await response.json()
-  expect(data.content).toHaveLength(3)
+  expect(data.content).toHaveLength(7)
   expect(data.content[0].titulo).toBe('Jogo de teste 1')
 })
 
