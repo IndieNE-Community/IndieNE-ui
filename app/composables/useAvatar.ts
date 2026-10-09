@@ -1,9 +1,10 @@
-// Avatar gerado a partir do nome (sem upload, sem backend).
-// Mesmo estilo usado nos comentários (DiceBear avataaars).
+import { buildAvatarUrl } from '~/utils/avatar'
+
+// Avatar gerado pelo serviço configurado no ambiente, sem upload.
 export function useAvatar () {
+  const { public: { avatarBase } } = useRuntimeConfig()
   function getAvatarUrl (nome?: string | null): string {
-    const seed = encodeURIComponent(nome?.trim() || 'IndieNE')
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`
+    return buildAvatarUrl(avatarBase, nome?.trim() || 'IndieNE')
   }
 
   return { getAvatarUrl }

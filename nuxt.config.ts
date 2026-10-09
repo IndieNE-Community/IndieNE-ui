@@ -4,6 +4,9 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@nuxtjs/tailwindcss'],
   runtimeConfig: {
-    backendBase: process.env.NUXT_BACKEND_BASE || 'http://localhost:8080'
+    backendBase: '',
+    public: {
+      avatarBase: ''
+    }
   }
 })

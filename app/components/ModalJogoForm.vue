@@ -254,7 +254,7 @@
                 </div>
               </div>
               <p id="jogo-foto-url-ajuda" class="mt-2 text-xs text-zinc-500">
-                Use URLs públicas. O upload de arquivos é apenas uma prévia e não pode ser salvo até a API oferecer upload próprio.
+                Use links públicos das imagens. Arquivos do seu dispositivo aparecem apenas na prévia e ainda não podem ser salvos.
               </p>
             </div>
           </div>

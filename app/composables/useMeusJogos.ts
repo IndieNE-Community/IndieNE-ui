@@ -49,7 +49,7 @@ function toRequest (jogo: Omit<JogoDev, 'id'> | JogoDev) {
 function validarImagens (imagens: string[]) {
   const indiceDataUrl = imagens.findIndex(imagem => imagem.startsWith('data:'))
   if (indiceDataUrl >= 0) {
-    throw new Error(`A imagem ${indiceDataUrl + 1} é um arquivo local. Use uma URL pública enquanto o upload não for suportado pela API.`)
+    throw new Error(`A imagem ${indiceDataUrl + 1} está no seu dispositivo e ainda não pode ser enviada. Use um link público para essa imagem.`)
   }
 }
 
